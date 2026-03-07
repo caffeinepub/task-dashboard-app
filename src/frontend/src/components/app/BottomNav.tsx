@@ -12,12 +12,11 @@ interface BottomNavProps {
 const tabs = [
   { id: "home" as NavTab, label: "Home", Icon: Home },
   { id: "profile" as NavTab, label: "Profile", Icon: User },
+  { id: "admin" as NavTab, label: "Admin", Icon: ShieldAlert },
 ];
 
-export function BottomNav({ activeTab, onTabChange, isAdmin }: BottomNavProps) {
-  const allTabs = isAdmin
-    ? [...tabs, { id: "admin" as NavTab, label: "Admin", Icon: ShieldAlert }]
-    : tabs;
+export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const allTabs = tabs;
 
   return (
     <nav

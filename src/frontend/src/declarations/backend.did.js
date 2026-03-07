@@ -24,6 +24,17 @@ export const UserRole = IDL.Variant({
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
+export const PaymentRequest = IDL.Record({
+  'id' : IDL.Nat,
+  'status' : IDL.Variant({
+    'pending' : IDL.Null,
+    'accepted' : IDL.Null,
+    'declined' : IDL.Null,
+  }),
+  'userId' : IDL.Principal,
+  'createdAt' : IDL.Int,
+  'amount' : IDL.Nat,
+});
 export const TaskStatus = IDL.Variant({
   'pending' : IDL.Null,
   'approved' : IDL.Null,
@@ -79,10 +90,42 @@ export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'blockUser' : IDL.Func([IDL.Principal], [], []),
+  'getAllPayments' : IDL.Func([], [IDL.Vec(PaymentRequest)], ['query']),
   'getAllSubmissions' : IDL.Func([], [IDL.Vec(Submission)], ['query']),
+  'getAllUsersAnalytics' : IDL.Func(
+      [],
+      [
+        IDL.Vec(
+          IDL.Record({
+            'userId' : IDL.Principal,
+            'tasksCompleted' : IDL.Nat,
+            'email' : IDL.Text,
+            'totalSubmissions' : IDL.Nat,
+            'lastLogin' : IDL.Opt(IDL.Int),
+          })
+        ),
+      ],
+      ['query'],
+    ),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
+  'getUserAnalytics' : IDL.Func(
+      [IDL.Principal],
+      [
+        IDL.Record({
+          'tasksCompleted' : IDL.Nat,
+          'totalSubmissions' : IDL.Nat,
+          'lastLogin' : IDL.Opt(IDL.Int),
+        }),
+      ],
+      ['query'],
+    ),
+  'getUserPayments' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Vec(PaymentRequest)],
+      ['query'],
+    ),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -94,6 +137,9 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'recordLastLogin' : IDL.Func([], [], []),
+  'requestPayment' : IDL.Func([IDL.Nat], [], []),
+  'reviewPayment' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
   'reviewSubmission' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'submitTask' : IDL.Func([IDL.Nat, Blob], [], []),
@@ -119,6 +165,17 @@ export const idlFactory = ({ IDL }) => {
     'admin' : IDL.Null,
     'user' : IDL.Null,
     'guest' : IDL.Null,
+  });
+  const PaymentRequest = IDL.Record({
+    'id' : IDL.Nat,
+    'status' : IDL.Variant({
+      'pending' : IDL.Null,
+      'accepted' : IDL.Null,
+      'declined' : IDL.Null,
+    }),
+    'userId' : IDL.Principal,
+    'createdAt' : IDL.Int,
+    'amount' : IDL.Nat,
   });
   const TaskStatus = IDL.Variant({
     'pending' : IDL.Null,
@@ -175,10 +232,42 @@ export const idlFactory = ({ IDL }) => {
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'blockUser' : IDL.Func([IDL.Principal], [], []),
+    'getAllPayments' : IDL.Func([], [IDL.Vec(PaymentRequest)], ['query']),
     'getAllSubmissions' : IDL.Func([], [IDL.Vec(Submission)], ['query']),
+    'getAllUsersAnalytics' : IDL.Func(
+        [],
+        [
+          IDL.Vec(
+            IDL.Record({
+              'userId' : IDL.Principal,
+              'tasksCompleted' : IDL.Nat,
+              'email' : IDL.Text,
+              'totalSubmissions' : IDL.Nat,
+              'lastLogin' : IDL.Opt(IDL.Int),
+            })
+          ),
+        ],
+        ['query'],
+      ),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
+    'getUserAnalytics' : IDL.Func(
+        [IDL.Principal],
+        [
+          IDL.Record({
+            'tasksCompleted' : IDL.Nat,
+            'totalSubmissions' : IDL.Nat,
+            'lastLogin' : IDL.Opt(IDL.Int),
+          }),
+        ],
+        ['query'],
+      ),
+    'getUserPayments' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Vec(PaymentRequest)],
+        ['query'],
+      ),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
@@ -190,6 +279,9 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'recordLastLogin' : IDL.Func([], [], []),
+    'requestPayment' : IDL.Func([IDL.Nat], [], []),
+    'reviewPayment' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
     'reviewSubmission' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'submitTask' : IDL.Func([IDL.Nat, Blob], [], []),

@@ -5,8 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { AdminAuthGate } from "./components/app/AdminAuthGate";
 import { AuthScreen } from "./components/app/AuthScreen";
 import { BottomNav, type NavTab } from "./components/app/BottomNav";
+import { useActor } from "./hooks/useActor";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
-import { useCallerProfile, useIsAdmin } from "./hooks/useQueries";
+import {
+  useCallerProfile,
+  useIsAdmin,
+  useRecordLastLogin,
+} from "./hooks/useQueries";
 import { HomePage } from "./pages/HomePage";
 import { ProfilePage } from "./pages/ProfilePage";
 
@@ -128,6 +133,8 @@ export default function App() {
 
   const { data: profile, isLoading: profileLoading } = useCallerProfile();
   const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
+  const recordLastLogin = useRecordLastLogin();
+  const { actor } = useActor();
 
   const [activeTab, setActiveTab] = useState<NavTab>("home");
   const [showAdmin, setShowAdmin] = useState(false);
@@ -135,6 +142,14 @@ export default function App() {
 
   // Track whether the user was previously unauthenticated (for detecting fresh login)
   const prevAuthRef = useRef(false);
+
+  // Register user in backend when authenticated — ensures access control is set up
+  const recordLastLoginMutate = recordLastLogin.mutate;
+  useEffect(() => {
+    if (isAuthenticated && actor) {
+      recordLastLoginMutate();
+    }
+  }, [isAuthenticated, actor, recordLastLoginMutate]);
 
   // When user transitions from unauthenticated → authenticated + has profile → show splash
   useEffect(() => {

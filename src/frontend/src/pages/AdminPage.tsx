@@ -25,14 +25,17 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Submission, Task } from "../backend.d";
+import type { PaymentRequest, Submission, Task } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import {
   getStatusClass,
   getStatusLabel,
   toObjectUrl,
+  useAllPayments,
   useAllSubmissions,
+  useAllUsersAnalytics,
   useBlockUser,
+  useReviewPayment,
   useReviewSubmission,
   useTasks,
   useUnblockUser,
@@ -415,40 +418,191 @@ function UserRow({
   );
 }
 
+// ─── Payment Row ────────────────────────────────────────────────────────────
+
+function PaymentRow({
+  payment,
+  index,
+}: { payment: PaymentRequest; index: number }) {
+  const reviewPayment = useReviewPayment();
+
+  const principalStr = payment.userId.toString();
+  const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
+  const statusStr = String(payment.status) as string;
+
+  const isPending = statusStr === "pending";
+  const isAccepted = statusStr === "accepted";
+
+  const statusStyles: Record<
+    string,
+    { bg: string; color: string; label: string }
+  > = {
+    pending: {
+      bg: "oklch(0.82 0.18 85 / 0.12)",
+      color: "oklch(0.82 0.18 85)",
+      label: "Pending",
+    },
+    accepted: {
+      bg: "oklch(0.72 0.18 155 / 0.12)",
+      color: "oklch(0.72 0.18 155)",
+      label: "Accepted",
+    },
+    declined: {
+      bg: "oklch(var(--destructive) / 0.12)",
+      color: "oklch(var(--destructive))",
+      label: "Declined",
+    },
+  };
+  const style = statusStyles[statusStr] ?? statusStyles.pending;
+
+  const createdDate = new Date(
+    Number(payment.createdAt) / 1_000_000,
+  ).toLocaleDateString();
+
+  const handleReview = async (approve: boolean) => {
+    try {
+      await reviewPayment.mutateAsync({ paymentId: payment.id, approve });
+      toast.success(approve ? "Payment accepted!" : "Payment declined");
+    } catch {
+      toast.error("Failed to update payment");
+    }
+  };
+
+  return (
+    <div
+      data-ocid={`admin.payment.item.${index + 1}`}
+      className="glass-card rounded-2xl p-4 space-y-3"
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-0.5">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: "oklch(0.82 0.18 85 / 0.1)" }}
+            >
+              <User
+                className="w-3.5 h-3.5"
+                style={{ color: "oklch(0.82 0.18 85 / 0.7)" }}
+              />
+            </div>
+            <p className="text-xs font-mono text-muted-foreground truncate">
+              {shortPrincipal}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 mt-1.5">
+            <div className="flex items-baseline gap-1">
+              <span
+                className="font-display font-bold text-xl"
+                style={{ color: "oklch(0.82 0.18 85)" }}
+              >
+                {Number(payment.amount).toLocaleString()}
+              </span>
+              <span className="text-muted-foreground text-xs">coins</span>
+            </div>
+            <span className="text-muted-foreground text-xs">{createdDate}</span>
+          </div>
+        </div>
+        <span
+          className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0"
+          style={{ background: style.bg, color: style.color }}
+        >
+          {style.label}
+        </span>
+      </div>
+
+      {/* Action Buttons for pending */}
+      {isPending && (
+        <div className="flex gap-2">
+          <Button
+            data-ocid={`admin.payment.approve_button.${index + 1}`}
+            size="sm"
+            onClick={() => handleReview(true)}
+            disabled={reviewPayment.isPending}
+            className="flex-1 rounded-xl h-9 text-xs font-semibold"
+            style={{
+              background: "oklch(0.72 0.18 155 / 0.15)",
+              color: "oklch(0.72 0.18 155)",
+              border: "1px solid oklch(0.72 0.18 155 / 0.3)",
+            }}
+          >
+            {reviewPayment.isPending ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <>
+                <Check className="w-3 h-3 mr-1" />
+                Accept
+              </>
+            )}
+          </Button>
+          <Button
+            data-ocid={`admin.payment.decline_button.${index + 1}`}
+            size="sm"
+            onClick={() => handleReview(false)}
+            disabled={reviewPayment.isPending}
+            className="flex-1 rounded-xl h-9 text-xs font-semibold"
+            style={{
+              background: "oklch(var(--destructive) / 0.15)",
+              color: "oklch(var(--destructive))",
+              border: "1px solid oklch(var(--destructive) / 0.3)",
+            }}
+          >
+            <X className="w-3 h-3 mr-1" />
+            Decline
+          </Button>
+        </div>
+      )}
+
+      {/* Settled state */}
+      {!isPending && (
+        <div
+          className="flex items-center gap-1.5 text-xs"
+          style={{
+            color: isAccepted
+              ? "oklch(0.72 0.18 155)"
+              : "oklch(var(--destructive))",
+          }}
+        >
+          {isAccepted ? (
+            <CheckCircle className="w-3.5 h-3.5" />
+          ) : (
+            <X className="w-3.5 h-3.5" />
+          )}
+          <span>{isAccepted ? "Payment accepted" : "Payment declined"}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Analytics User Card ────────────────────────────────────────────────────
 
 function AnalyticsUserCard({
-  principal,
-  submissions,
+  entry,
   index,
 }: {
-  principal: Principal;
-  submissions: Submission[];
+  entry: {
+    userId: Principal;
+    email: string;
+    lastLogin?: bigint;
+    tasksCompleted: bigint;
+    totalSubmissions: bigint;
+  };
   index: number;
 }) {
-  const { actor } = useActor();
-  const { data: userProfile } = useQuery({
-    queryKey: ["userProfile", principal.toString()],
-    queryFn: async () => {
-      if (!actor) return null;
-      return actor.getUserProfile(principal);
-    },
-    enabled: !!actor,
-  });
-
-  const principalStr = principal.toString();
+  const principalStr = entry.userId.toString();
   const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
+  const displayName = entry.email ? entry.email.split("@")[0] : shortPrincipal;
 
-  const userSubmissions = submissions.filter(
-    (s) => s.userId.toString() === principalStr,
-  );
-  const approved = userSubmissions.filter(
-    (s) => String(s.status) === "approved",
-  ).length;
-  const pending = userSubmissions.filter(
-    (s) => String(s.status) === "pending",
-  ).length;
-  const displayName = userProfile?.email?.split("@")[0] ?? shortPrincipal;
+  const lastSeenLabel = (() => {
+    if (!entry.lastLogin) return "Never";
+    const ms = Number(entry.lastLogin) / 1_000_000;
+    const diffDays = Math.floor((Date.now() - ms) / 86_400_000);
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 30) return `${diffDays} days ago`;
+    return new Date(ms).toLocaleDateString();
+  })();
 
   return (
     <div
@@ -467,38 +621,35 @@ function AnalyticsUserCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground truncate">
-            {userProfile?.email ?? shortPrincipal}
+            {entry.email || shortPrincipal}
           </p>
           <p className="text-xs font-mono text-muted-foreground truncate">
             {shortPrincipal}
           </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Last seen: {lastSeenLabel}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl p-2.5 text-center bg-secondary/40">
-          <p className="font-bold text-foreground text-base">
-            {userSubmissions.length}
+          <p
+            className="font-bold text-base"
+            style={{ color: "oklch(0.82 0.18 85)" }}
+          >
+            {Number(entry.tasksCompleted)}
           </p>
-          <p className="text-muted-foreground text-[10px]">Total</p>
+          <p className="text-muted-foreground text-[10px]">Tasks Done</p>
         </div>
         <div className="rounded-xl p-2.5 text-center bg-secondary/40">
           <p
             className="font-bold text-base"
-            style={{ color: "oklch(var(--success))" }}
+            style={{ color: "oklch(0.75 0.18 195)" }}
           >
-            {approved}
+            {Number(entry.totalSubmissions)}
           </p>
-          <p className="text-muted-foreground text-[10px]">Approved</p>
-        </div>
-        <div className="rounded-xl p-2.5 text-center bg-secondary/40">
-          <p
-            className="font-bold text-base"
-            style={{ color: "oklch(var(--warning))" }}
-          >
-            {pending}
-          </p>
-          <p className="text-muted-foreground text-[10px]">Pending</p>
+          <p className="text-muted-foreground text-[10px]">Submissions</p>
         </div>
       </div>
     </div>
@@ -510,6 +661,9 @@ function AnalyticsUserCard({
 export function AdminPage({ onBack }: AdminPageProps) {
   const { data: tasks, isLoading: tasksLoading } = useTasks();
   const { data: submissions, isLoading: subsLoading } = useAllSubmissions();
+  const { data: payments, isLoading: paymentsLoading } = useAllPayments();
+  const { data: analyticsData, isLoading: analyticsLoading } =
+    useAllUsersAnalytics();
 
   // Deduplicate users from submissions
   const uniqueUsers = submissions
@@ -522,6 +676,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const pendingSubmissions =
     submissions?.filter((s) => String(s.status) === "pending").length ?? 0;
+
+  const pendingPayments =
+    payments?.filter((p) => String(p.status) === "pending").length ?? 0;
 
   return (
     <div data-ocid="admin.page" className="page-enter min-h-screen">
@@ -626,6 +783,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <span className="flex items-center gap-1">
                   <CreditCard className="w-3 h-3" />
                   Payments
+                  {pendingPayments > 0 && (
+                    <span
+                      className="ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+                      style={{
+                        background: "oklch(0.82 0.18 85 / 0.2)",
+                        color: "oklch(0.82 0.18 85)",
+                      }}
+                    >
+                      {pendingPayments}
+                    </span>
+                  )}
                 </span>
               </TabsTrigger>
               <TabsTrigger
@@ -730,74 +898,77 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </TabsContent>
 
           {/* ── Payments Tab ── */}
-          <TabsContent value="payments" className="mt-0">
-            <div
-              data-ocid="admin.payments.panel"
-              className="glass-card rounded-2xl p-6 flex flex-col items-center text-center gap-4"
-              style={{ border: "1px solid oklch(0.82 0.18 85 / 0.1)" }}
-            >
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                style={{
-                  background: "oklch(0.82 0.18 85 / 0.1)",
-                  border: "1px solid oklch(0.82 0.18 85 / 0.2)",
-                }}
-              >
-                <CreditCard
-                  className="w-8 h-8"
-                  style={{ color: "oklch(0.82 0.18 85 / 0.7)" }}
+          <TabsContent value="payments" className="space-y-3 mt-0">
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                {
+                  label: "Total",
+                  value: payments?.length ?? 0,
+                  Icon: CreditCard,
+                  color: "0.82 0.18 85",
+                },
+                {
+                  label: "Pending",
+                  value: pendingPayments,
+                  Icon: Clock,
+                  color: "0.82 0.18 80",
+                },
+                {
+                  label: "Accepted",
+                  value:
+                    payments?.filter((p) => String(p.status) === "accepted")
+                      .length ?? 0,
+                  Icon: CheckCircle,
+                  color: "0.72 0.18 155",
+                },
+              ].map(({ label, value, Icon, color }) => (
+                <div
+                  key={label}
+                  className="glass-card rounded-2xl p-3 text-center"
+                >
+                  <Icon
+                    className="w-4 h-4 mx-auto mb-1.5"
+                    style={{ color: `oklch(${color} / 0.8)` }}
+                  />
+                  <p className="font-bold text-foreground text-lg">{value}</p>
+                  <p className="text-muted-foreground text-[10px]">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {paymentsLoading ? (
+              ["p1", "p2", "p3"].map((k) => (
+                <Skeleton
+                  key={k}
+                  className="h-28 rounded-2xl skeleton-shimmer"
                 />
-              </div>
-              <div>
-                <h3 className="font-display font-bold text-foreground text-base mb-1">
-                  Payment Processing
-                </h3>
-                <p className="text-muted-foreground text-sm max-w-xs">
-                  Payment processing is coming soon. Withdrawal requests from
-                  users will appear here for review.
+              ))
+            ) : !payments || payments.length === 0 ? (
+              <div
+                data-ocid="admin.payment.empty_state"
+                className="flex flex-col items-center justify-center py-16 text-center"
+              >
+                <CreditCard className="w-10 h-10 text-muted-foreground mb-3 opacity-40" />
+                <p className="text-muted-foreground text-sm">
+                  No payment requests yet
+                </p>
+                <p className="text-muted-foreground text-xs mt-1">
+                  User withdrawal requests will appear here
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Clock className="w-3.5 h-3.5" />
-                <span>Feature coming soon</span>
-              </div>
-
-              {/* Summary stats from submissions */}
-              <div className="w-full grid grid-cols-3 gap-2 mt-2">
-                {[
-                  {
-                    label: "Total Users",
-                    value: uniqueUsers.length,
-                    Icon: Users,
-                  },
-                  {
-                    label: "Approved Tasks",
-                    value:
-                      submissions?.filter(
-                        (s) => String(s.status) === "approved",
-                      ).length ?? 0,
-                    Icon: CheckCircle,
-                  },
-                  {
-                    label: "Pending Review",
-                    value: pendingSubmissions,
-                    Icon: Clock,
-                  },
-                ].map(({ label, value, Icon }) => (
-                  <div
-                    key={label}
-                    className="rounded-xl p-3 text-center bg-secondary/40"
-                  >
-                    <Icon
-                      className="w-4 h-4 mx-auto mb-1.5"
-                      style={{ color: "oklch(0.82 0.18 85 / 0.6)" }}
-                    />
-                    <p className="font-bold text-foreground text-lg">{value}</p>
-                    <p className="text-muted-foreground text-[10px]">{label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ) : (
+              payments.map((payment, i) => (
+                <motion.div
+                  key={String(payment.id)}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                >
+                  <PaymentRow payment={payment} index={i} />
+                </motion.div>
+              ))
+            )}
           </TabsContent>
 
           {/* ── Analytics Tab ── */}
@@ -807,21 +978,31 @@ export function AdminPage({ onBack }: AdminPageProps) {
               {[
                 {
                   label: "Total Users",
-                  value: uniqueUsers.length,
+                  value: analyticsData?.length ?? uniqueUsers.length,
                   Icon: Users,
                   color: "0.82 0.18 85",
                 },
                 {
                   label: "Total Submissions",
-                  value: submissions?.length ?? 0,
+                  value: analyticsData
+                    ? analyticsData.reduce(
+                        (sum, u) => sum + Number(u.totalSubmissions),
+                        0,
+                      )
+                    : (submissions?.length ?? 0),
                   Icon: Film,
                   color: "0.75 0.18 195",
                 },
                 {
-                  label: "Approved",
-                  value:
-                    submissions?.filter((s) => String(s.status) === "approved")
-                      .length ?? 0,
+                  label: "Tasks Completed",
+                  value: analyticsData
+                    ? analyticsData.reduce(
+                        (sum, u) => sum + Number(u.tasksCompleted),
+                        0,
+                      )
+                    : (submissions?.filter(
+                        (s) => String(s.status) === "approved",
+                      ).length ?? 0),
                   Icon: CheckCircle,
                   color: "0.72 0.18 155",
                 },
@@ -860,14 +1041,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 User Activity
               </h3>
 
-              {subsLoading ? (
+              {analyticsLoading ? (
                 ["a1", "a2", "a3"].map((k) => (
                   <Skeleton
                     key={k}
-                    className="h-24 rounded-2xl skeleton-shimmer mb-3"
+                    className="h-28 rounded-2xl skeleton-shimmer mb-3"
                   />
                 ))
-              ) : uniqueUsers.length === 0 ? (
+              ) : !analyticsData || analyticsData.length === 0 ? (
                 <div
                   data-ocid="admin.analytics.empty_state"
                   className="glass-card rounded-2xl flex flex-col items-center justify-center py-12 text-center"
@@ -879,18 +1060,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {uniqueUsers.map((principal, i) => (
+                  {analyticsData.map((entry, i) => (
                     <motion.div
-                      key={principal.toString()}
+                      key={entry.userId.toString()}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.04 }}
                     >
-                      <AnalyticsUserCard
-                        principal={principal}
-                        submissions={submissions ?? []}
-                        index={i}
-                      />
+                      <AnalyticsUserCard entry={entry} index={i} />
                     </motion.div>
                   ))}
                 </div>

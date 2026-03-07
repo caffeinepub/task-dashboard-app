@@ -13,6 +13,13 @@ export interface Task {
     title: string;
     image?: Blob;
 }
+export interface PaymentRequest {
+    id: bigint;
+    status: Variant_pending_accepted_declined;
+    userId: Principal;
+    createdAt: bigint;
+    amount: bigint;
+}
 export interface Submission {
     id: bigint;
     status: TaskStatus;
@@ -36,16 +43,38 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
+export enum Variant_pending_accepted_declined {
+    pending = "pending",
+    accepted = "accepted",
+    declined = "declined"
+}
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: Principal): Promise<void>;
+    getAllPayments(): Promise<Array<PaymentRequest>>;
     getAllSubmissions(): Promise<Array<Submission>>;
+    getAllUsersAnalytics(): Promise<Array<{
+        userId: Principal;
+        tasksCompleted: bigint;
+        email: string;
+        totalSubmissions: bigint;
+        lastLogin?: bigint;
+    }>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getTasks(): Promise<Array<Task>>;
+    getUserAnalytics(userId: Principal): Promise<{
+        tasksCompleted: bigint;
+        totalSubmissions: bigint;
+        lastLogin?: bigint;
+    }>;
+    getUserPayments(userId: Principal): Promise<Array<PaymentRequest>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getUserSubmissions(userId: Principal): Promise<Array<Submission>>;
     isCallerAdmin(): Promise<boolean>;
+    recordLastLogin(): Promise<void>;
+    requestPayment(amount: bigint): Promise<void>;
+    reviewPayment(paymentId: bigint, approve: boolean): Promise<void>;
     reviewSubmission(submissionId: bigint, approve: boolean): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     submitTask(taskId: bigint, file: Blob): Promise<void>;

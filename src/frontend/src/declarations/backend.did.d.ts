@@ -11,6 +11,15 @@ import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
 export type Blob = Uint8Array;
+export interface PaymentRequest {
+  'id' : bigint,
+  'status' : { 'pending' : null } |
+    { 'accepted' : null } |
+    { 'declined' : null },
+  'userId' : Principal,
+  'createdAt' : bigint,
+  'amount' : bigint,
+}
 export interface Submission {
   'id' : bigint,
   'status' : TaskStatus,
@@ -61,13 +70,38 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'blockUser' : ActorMethod<[Principal], undefined>,
+  'getAllPayments' : ActorMethod<[], Array<PaymentRequest>>,
   'getAllSubmissions' : ActorMethod<[], Array<Submission>>,
+  'getAllUsersAnalytics' : ActorMethod<
+    [],
+    Array<
+      {
+        'userId' : Principal,
+        'tasksCompleted' : bigint,
+        'email' : string,
+        'totalSubmissions' : bigint,
+        'lastLogin' : [] | [bigint],
+      }
+    >
+  >,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getTasks' : ActorMethod<[], Array<Task>>,
+  'getUserAnalytics' : ActorMethod<
+    [Principal],
+    {
+      'tasksCompleted' : bigint,
+      'totalSubmissions' : bigint,
+      'lastLogin' : [] | [bigint],
+    }
+  >,
+  'getUserPayments' : ActorMethod<[Principal], Array<PaymentRequest>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getUserSubmissions' : ActorMethod<[Principal], Array<Submission>>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'recordLastLogin' : ActorMethod<[], undefined>,
+  'requestPayment' : ActorMethod<[bigint], undefined>,
+  'reviewPayment' : ActorMethod<[bigint, boolean], undefined>,
   'reviewSubmission' : ActorMethod<[bigint, boolean], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'submitTask' : ActorMethod<[bigint, Blob], undefined>,

@@ -6,10 +6,10 @@ import Principal "mo:core/Principal";
 import Map "mo:core/Map";
 import Runtime "mo:core/Runtime";
 import Time "mo:core/Time";
-import Text "mo:core/Text";
 import Nat "mo:core/Nat";
 import Order "mo:core/Order";
 import Array "mo:core/Array";
+import Text "mo:core/Text";
 
 actor {
   include MixinStorage();
@@ -23,8 +23,16 @@ actor {
 
   public type UserProfile = {
     email : Text;
-    role : Text; // "admin" or "user"
+    role : Text;
     isBlocked : Bool;
+  };
+
+  public type PaymentRequest = {
+    id : Nat;
+    userId : Principal;
+    amount : Nat;
+    status : { #pending; #accepted; #declined };
+    createdAt : Int;
   };
 
   module Task {
@@ -50,7 +58,7 @@ actor {
     };
 
     public func compare(s1 : Submission, s2 : Submission) : Order.Order {
-      let timeOrder = Int.compare(s2.createdAt, s1.createdAt); // Most recent first
+      let timeOrder = Int.compare(s2.createdAt, s1.createdAt);
       if (timeOrder != #equal) {
         return timeOrder;
       };
@@ -58,16 +66,24 @@ actor {
     };
   };
 
-  // Persistent storage
   let tasks = Map.empty<Nat, Task.Task>();
   let submissions = Map.empty<Nat, Submission.Submission>();
   var nextSubmissionId : Nat = 0;
   let userProfiles = Map.empty<Principal, UserProfile>();
+  let paymentRequests = Map.empty<Nat, PaymentRequest>();
+  var nextPaymentId : Nat = 0;
+
+  let userAnalytics = Map.empty<Principal, {
+    var lastLogin : ?Int;
+    var tasksCompleted : Nat;
+    var totalSubmissions : Nat;
+  }>();
 
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  // Initialize 6 tasks
+  let autoRegisteredUsers = Map.empty<Principal, Bool>();
+
   private func initTasks() {
     for (i in [0, 1, 2, 3, 4, 5].values()) {
       tasks.add(i, { id = i; title = "Task " # i.toText(); image = null });
@@ -75,10 +91,52 @@ actor {
   };
   initTasks();
 
-  // User profile management
+  private func ensureUserRegistered(caller : Principal) {
+    if (not caller.isAnonymous()) {
+      switch (userProfiles.get(caller)) {
+        case (null) {
+          let newProfile : UserProfile = {
+            email = "";
+            role = "user";
+            isBlocked = false;
+          };
+          userProfiles.add(caller, newProfile);
+          autoRegisteredUsers.add(caller, true);
+          userAnalytics.add(
+            caller,
+            {
+              var lastLogin : ?Int = null;
+              var tasksCompleted = 0;
+              var totalSubmissions = 0;
+            },
+          );
+        };
+        case (_) {};
+      };
+    };
+  };
+
+  private func hasUserPermission(caller : Principal) : Bool {
+    if (caller.isAnonymous()) {
+      return false;
+    };
+    switch (autoRegisteredUsers.get(caller)) {
+      case (?true) { return true };
+      case (_) {};
+    };
+    AccessControl.hasPermission(accessControlState, caller, #user);
+  };
+
+  private func isUserBlocked(userId : Principal) : Bool {
+    switch (userProfiles.get(userId)) {
+      case (?profile) { profile.isBlocked };
+      case null { false };
+    };
+  };
+
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Anonymous users cannot view profiles");
     };
     userProfiles.get(caller);
   };
@@ -91,10 +149,10 @@ actor {
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+    ensureUserRegistered(caller);
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Anonymous users cannot save profiles");
     };
-    // Check if user is blocked
     switch (userProfiles.get(caller)) {
       case (?existingProfile) {
         if (existingProfile.isBlocked) {
@@ -106,7 +164,6 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Admin user management
   public shared ({ caller }) func blockUser(userId : Principal) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can block users");
@@ -145,15 +202,6 @@ actor {
     };
   };
 
-  // Helper to check if user is blocked
-  private func isUserBlocked(userId : Principal) : Bool {
-    switch (userProfiles.get(userId)) {
-      case (?profile) { profile.isBlocked };
-      case null { false };
-    };
-  };
-
-  // Admin functions for tasks
   public shared ({ caller }) func updateTask(taskId : Nat, title : Text, image : ?Blob) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update tasks");
@@ -169,9 +217,8 @@ actor {
     tasks.add(taskId, task);
   };
 
-  // Get all tasks - requires user authentication
   public query ({ caller }) func getTasks() : async [Task.Task] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not hasUserPermission(caller)) {
       Runtime.trap("Unauthorized: Only authenticated users can view tasks");
     };
     if (isUserBlocked(caller)) {
@@ -180,9 +227,8 @@ actor {
     tasks.values().toArray().sort();
   };
 
-  // User submissions
   public shared ({ caller }) func submitTask(taskId : Nat, file : Blob) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not hasUserPermission(caller)) {
       Runtime.trap("Unauthorized: Only users can submit tasks");
     };
     if (isUserBlocked(caller)) {
@@ -201,9 +247,14 @@ actor {
     };
     submissions.add(nextSubmissionId, submission);
     nextSubmissionId += 1;
+    switch (userAnalytics.get(caller)) {
+      case (?analytics) {
+        analytics.totalSubmissions += 1;
+      };
+      case null {};
+    };
   };
 
-  // Admin review submissions
   public shared ({ caller }) func reviewSubmission(submissionId : Nat, approve : Bool) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can review submissions");
@@ -222,16 +273,22 @@ actor {
           createdAt = submission.createdAt;
         };
         submissions.add(submissionId, updated);
+        if (approve) {
+          switch (userAnalytics.get(submission.userId)) {
+            case (?analytics) {
+              analytics.tasksCompleted += 1;
+            };
+            case null {};
+          };
+        };
       };
     };
   };
 
-  // Get submissions for user
   public query ({ caller }) func getUserSubmissions(userId : Principal) : async [Submission.Submission] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not hasUserPermission(caller)) {
       Runtime.trap("Unauthorized: Only authenticated users can view submissions");
     };
-    // Users can only view their own submissions, admins can view any
     if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own submissions");
     };
@@ -244,11 +301,152 @@ actor {
     filtered.sort();
   };
 
-  // Get all submissions (admin only)
   public query ({ caller }) func getAllSubmissions() : async [Submission.Submission] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all submissions");
     };
     submissions.values().toArray().sort();
+  };
+
+  public shared ({ caller }) func requestPayment(amount : Nat) : async () {
+    if (not hasUserPermission(caller)) {
+      Runtime.trap("Unauthorized: Only users can request payments");
+    };
+    if (isUserBlocked(caller)) {
+      Runtime.trap("Unauthorized: User is blocked");
+    };
+    let request : PaymentRequest = {
+      id = nextPaymentId;
+      userId = caller;
+      amount;
+      status = #pending;
+      createdAt = Time.now();
+    };
+    paymentRequests.add(nextPaymentId, request);
+    nextPaymentId += 1;
+  };
+
+  public shared ({ caller }) func reviewPayment(paymentId : Nat, approve : Bool) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can review payments");
+    };
+    switch (paymentRequests.get(paymentId)) {
+      case (null) {
+        Runtime.trap("Payment request not found");
+      };
+      case (?request) {
+        let updated = {
+          id = request.id;
+          userId = request.userId;
+          amount = request.amount;
+          status = if (approve) { #accepted } else { #declined };
+          createdAt = request.createdAt;
+        };
+        paymentRequests.add(paymentId, updated);
+      };
+    };
+  };
+
+  public query ({ caller }) func getUserPayments(userId : Principal) : async [PaymentRequest] {
+    if (not hasUserPermission(caller)) {
+      Runtime.trap("Unauthorized: Only authenticated users can view payments");
+    };
+    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own payments");
+    };
+    if (isUserBlocked(caller)) {
+      Runtime.trap("Unauthorized: User is blocked");
+    };
+    paymentRequests.values().toArray().filter<PaymentRequest>(func(p : PaymentRequest) : Bool {
+      p.userId == userId
+    });
+  };
+
+  public query ({ caller }) func getAllPayments() : async [PaymentRequest] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all payments");
+    };
+    paymentRequests.values().toArray();
+  };
+
+  public shared ({ caller }) func recordLastLogin() : async () {
+    if (not hasUserPermission(caller)) {
+      Runtime.trap("Unauthorized: Only users can record login");
+    };
+    if (isUserBlocked(caller)) {
+      Runtime.trap("Unauthorized: User is blocked");
+    };
+    switch (userAnalytics.get(caller)) {
+      case (?analytics) {
+        analytics.lastLogin := ?Time.now();
+      };
+      case null {
+        userAnalytics.add(
+          caller,
+          {
+            var lastLogin : ?Int = ?Time.now();
+            var tasksCompleted = 0;
+            var totalSubmissions = 0;
+          },
+        );
+      };
+    };
+  };
+
+  public query ({ caller }) func getUserAnalytics(userId : Principal) : async {
+    lastLogin : ?Int;
+    tasksCompleted : Nat;
+    totalSubmissions : Nat;
+  } {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view user analytics");
+    };
+    switch (userAnalytics.get(userId)) {
+      case (?analytics) {
+        {
+          lastLogin = analytics.lastLogin;
+          tasksCompleted = analytics.tasksCompleted;
+          totalSubmissions = analytics.totalSubmissions;
+        };
+      };
+      case null {
+        { lastLogin = null; tasksCompleted = 0; totalSubmissions = 0 };
+      };
+    };
+  };
+
+  public query ({ caller }) func getAllUsersAnalytics() : async [{
+    userId : Principal;
+    email : Text;
+    lastLogin : ?Int;
+    tasksCompleted : Nat;
+    totalSubmissions : Nat;
+  }] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view all analytics");
+    };
+    userProfiles.entries().toArray().map(
+      func((userId, profile) : (Principal, UserProfile)) : {
+        userId : Principal;
+        email : Text;
+        lastLogin : ?Int;
+        tasksCompleted : Nat;
+        totalSubmissions : Nat;
+      } {
+        let analytics = switch (userAnalytics.get(userId)) {
+          case (?a) { a };
+          case null {
+            { var lastLogin : ?Int = null; var tasksCompleted : Nat = 0; var totalSubmissions : Nat = 0 };
+          };
+        };
+        {
+          userId;
+          email = profile.email;
+          lastLogin = analytics.lastLogin;
+          tasksCompleted = analytics.tasksCompleted;
+          totalSubmissions = analytics.totalSubmissions;
+        };
+      }
+    );
   };
 };

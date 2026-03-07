@@ -1,31 +1,28 @@
 # Dark Coin
 
 ## Current State
-- Full app with Internet Identity auth, 6-task grid, and admin panel at `/admin`
-- Admin panel is directly accessible after login with no extra protection
-- App.tsx renders AdminPage when user clicks Admin tab or navigates to /admin
-- SplashScreen shown post-login for 3.5 seconds
-- Electric Gold dark theme with glassmorphic cards
+Full app is built with:
+- Internet Identity auth with profile setup (display name + email)
+- 6-task grid with glassmorphic cards, proof upload, status badges
+- Admin panel protected by 8-digit PIN (09186114) + 4-second face scan
+- Admin tabs: Tasks, Submissions, Users, Payments, Analytics
+- Electric gold dark theme, splash screen, bottom nav
 
 ## Requested Changes (Diff)
 
 ### Add
-- AdminAuthGate component that intercepts access to AdminPage
-- Step 1: 6-digit PIN entry screen (code: 09186114) with styled OTP-style input
-- Step 2: Face verification screen — activates device camera for 4 seconds, shows scanning animation (human/bot detection UI), then marks as verified
-- On successful PIN + face verify → session flag set → AdminPage rendered
-- Session resets when admin navigates away (back to home)
+- Backend: `ensureUserRegistered` helper that auto-registers any non-anonymous caller as `#user` if they are not yet in the access control system
+- Backend: `saveCallerUserProfile` must call `ensureUserRegistered` before the permission check so new users can save their profile without hitting a trap
+- Backend: `getCallerUserProfile` must NOT trap for unregistered users — just return `null` for unknown callers (skip permission check for this query, only block anonymous)
 
 ### Modify
-- App.tsx: wrap AdminPage render with AdminAuthGate; gate resets on handleBackFromAdmin
+- Backend: Remove the `hasPermission` guard from `getCallerUserProfile` — replace with a simple anonymous check so new users can call it before they're registered
+- Backend: `saveCallerUserProfile` calls `ensureUserRegistered(caller)` first, then proceeds
 
 ### Remove
 - Nothing removed
 
 ## Implementation Plan
-1. Create `src/frontend/src/components/app/AdminAuthGate.tsx`
-   - State machine: `"pin" | "face" | "verified"`
-   - PIN screen: OTP-style 8-digit input (styled electric-gold), validate against "09186114", show error on wrong code
-   - Face screen: access webcam via getUserMedia, show live video feed, overlay scanning ring animation for 4 seconds, progress bar, "Analyzing face..." text, then auto-advance to verified
-   - Transition to AdminPage on verified
-2. Update App.tsx: replace direct `<AdminPage>` render with `<AdminAuthGate onBack={handleBackFromAdmin} />` which internally shows AdminPage when verified; reset auth state on back
+1. Regenerate Motoko backend with `ensureUserRegistered` helper and updated `getCallerUserProfile` + `saveCallerUserProfile` functions
+2. Keep all existing functionality: tasks, submissions, user management, payments, analytics, block/unblock
+3. Frontend stays unchanged — the fix is purely backend

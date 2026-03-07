@@ -187,6 +187,64 @@ export function useUnblockUser() {
   });
 }
 
+// ─── Payments ──────────────────────────────────────────────────────────────
+
+export function useAllPayments() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["allPayments"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getAllPayments();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useReviewPayment() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      paymentId,
+      approve,
+    }: {
+      paymentId: bigint;
+      approve: boolean;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.reviewPayment(paymentId, approve);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allPayments"] });
+    },
+  });
+}
+
+// ─── Analytics ─────────────────────────────────────────────────────────────
+
+export function useAllUsersAnalytics() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["allUsersAnalytics"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getAllUsersAnalytics();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useRecordLastLogin() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      return actor.recordLastLogin();
+    },
+  });
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 /** Convert a Uint8Array image to an object URL (remember to revoke). */
