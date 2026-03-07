@@ -50,6 +50,7 @@ export const Submission = IDL.Record({
   'taskId' : IDL.Nat,
 });
 export const UserProfile = IDL.Record({
+  'coinBalance' : IDL.Nat,
   'isBlocked' : IDL.Bool,
   'role' : IDL.Text,
   'email' : IDL.Text,
@@ -88,8 +89,10 @@ export const idlService = IDL.Service({
     ),
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+  'addCoins' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'blockUser' : IDL.Func([IDL.Principal], [], []),
+  'deductCoins' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
   'getAllPayments' : IDL.Func([], [IDL.Vec(PaymentRequest)], ['query']),
   'getAllSubmissions' : IDL.Func([], [IDL.Vec(Submission)], ['query']),
   'getAllUsersAnalytics' : IDL.Func(
@@ -109,6 +112,7 @@ export const idlService = IDL.Service({
     ),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getCoinBalance' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
   'getTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
   'getUserAnalytics' : IDL.Func(
       [IDL.Principal],
@@ -141,7 +145,17 @@ export const idlService = IDL.Service({
   'requestPayment' : IDL.Func([IDL.Nat], [], []),
   'reviewPayment' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
   'reviewSubmission' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
-  'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'saveCallerUserProfile' : IDL.Func(
+      [
+        IDL.Record({
+          'isBlocked' : IDL.Bool,
+          'role' : IDL.Text,
+          'email' : IDL.Text,
+        }),
+      ],
+      [],
+      [],
+    ),
   'submitTask' : IDL.Func([IDL.Nat, Blob], [], []),
   'unblockUser' : IDL.Func([IDL.Principal], [], []),
   'updateTask' : IDL.Func([IDL.Nat, IDL.Text, IDL.Opt(Blob)], [], []),
@@ -192,6 +206,7 @@ export const idlFactory = ({ IDL }) => {
     'taskId' : IDL.Nat,
   });
   const UserProfile = IDL.Record({
+    'coinBalance' : IDL.Nat,
     'isBlocked' : IDL.Bool,
     'role' : IDL.Text,
     'email' : IDL.Text,
@@ -230,8 +245,10 @@ export const idlFactory = ({ IDL }) => {
       ),
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    'addCoins' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'blockUser' : IDL.Func([IDL.Principal], [], []),
+    'deductCoins' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
     'getAllPayments' : IDL.Func([], [IDL.Vec(PaymentRequest)], ['query']),
     'getAllSubmissions' : IDL.Func([], [IDL.Vec(Submission)], ['query']),
     'getAllUsersAnalytics' : IDL.Func(
@@ -251,6 +268,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getCoinBalance' : IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
     'getTasks' : IDL.Func([], [IDL.Vec(Task)], ['query']),
     'getUserAnalytics' : IDL.Func(
         [IDL.Principal],
@@ -283,7 +301,17 @@ export const idlFactory = ({ IDL }) => {
     'requestPayment' : IDL.Func([IDL.Nat], [], []),
     'reviewPayment' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
     'reviewSubmission' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
-    'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'saveCallerUserProfile' : IDL.Func(
+        [
+          IDL.Record({
+            'isBlocked' : IDL.Bool,
+            'role' : IDL.Text,
+            'email' : IDL.Text,
+          }),
+        ],
+        [],
+        [],
+      ),
     'submitTask' : IDL.Func([IDL.Nat, Blob], [], []),
     'unblockUser' : IDL.Func([IDL.Principal], [], []),
     'updateTask' : IDL.Func([IDL.Nat, IDL.Text, IDL.Opt(Blob)], [], []),

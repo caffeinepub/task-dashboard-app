@@ -228,6 +228,27 @@ export default function App() {
     );
   }
 
+  // ── Admin route — render admin panel directly, no bottom nav ─────────────
+  // This check must come before the profile guard so /admin works even if
+  // the authenticated user has not yet completed their profile setup.
+  if (isAdminRoute) {
+    return (
+      <>
+        <AdminAuthGate onBack={handleBackFromAdmin} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: "oklch(0.14 0.015 265)",
+              border: "1px solid oklch(0.24 0.03 265 / 0.6)",
+              color: "oklch(0.96 0.008 80)",
+            },
+          }}
+        />
+      </>
+    );
+  }
+
   // ── Still loading profile ─────────────────────────────────────────────────
   if (profileLoading || adminLoading) {
     return (
@@ -268,25 +289,6 @@ export default function App() {
   }
 
   const principal = identity?.getPrincipal();
-
-  // ── Admin route — render admin panel directly, no bottom nav ─────────────
-  if (isAdminRoute) {
-    return (
-      <>
-        <AdminAuthGate onBack={handleBackFromAdmin} />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            style: {
-              background: "oklch(0.14 0.015 265)",
-              border: "1px solid oklch(0.24 0.03 265 / 0.6)",
-              color: "oklch(0.96 0.008 80)",
-            },
-          }}
-        />
-      </>
-    );
-  }
 
   return (
     <>

@@ -50,8 +50,26 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
         setShowSplash(false);
         onProfileSaved();
       }, 3500);
-    } catch {
-      toast.error("Failed to save profile. Please try again.");
+    } catch (err) {
+      console.error("Profile save error:", err);
+      // Retry once automatically before showing the error
+      try {
+        await saveProfile.mutateAsync({
+          email: email.trim(),
+          role: "user",
+          isBlocked: false,
+        });
+        toast.success("Welcome to Dark Coin!");
+        setShowSplash(true);
+        setTimeout(() => {
+          setShowSplash(false);
+          onProfileSaved();
+        }, 3500);
+      } catch {
+        toast.error(
+          "Failed to save profile. Please wait a moment and try again.",
+        );
+      }
     }
   };
 

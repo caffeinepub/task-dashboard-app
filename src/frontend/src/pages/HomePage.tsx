@@ -5,7 +5,11 @@ import { useState } from "react";
 import type { Task, UserProfile } from "../backend.d";
 import { TaskCard, TaskCardSkeleton } from "../components/app/TaskCard";
 import { TaskDetailSheet } from "../components/app/TaskDetailSheet";
-import { useTasks, useUserSubmissions } from "../hooks/useQueries";
+import {
+  useGetCoinBalance,
+  useTasks,
+  useUserSubmissions,
+} from "../hooks/useQueries";
 
 interface HomePageProps {
   profile: UserProfile | null;
@@ -16,6 +20,7 @@ interface HomePageProps {
 export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
   const { data: tasks, isLoading: tasksLoading } = useTasks();
   const { data: submissions } = useUserSubmissions(principal);
+  const { data: coinBalance } = useGetCoinBalance(principal);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -142,6 +147,56 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
               ? `${tasks.length} tasks available`
               : "Loading your tasks…"}
           </p>
+        </motion.div>
+
+        {/* Coin Balance Mini Bar */}
+        <motion.div
+          data-ocid="home.coin_balance.card"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08, duration: 0.3 }}
+          className="mb-4 rounded-2xl px-4 py-3 flex items-center justify-between"
+          style={{
+            background: "oklch(0.13 0.02 85 / 0.7)",
+            border: "1px solid oklch(0.82 0.18 85 / 0.35)",
+            backdropFilter: "blur(12px)",
+            boxShadow:
+              "0 0 16px oklch(0.82 0.18 85 / 0.12), inset 0 1px 0 oklch(0.82 0.18 85 / 0.08)",
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{
+                background: "oklch(0.82 0.18 85 / 0.18)",
+                border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+              }}
+            >
+              <Coins
+                className="w-4 h-4"
+                style={{ color: "oklch(0.82 0.18 85)" }}
+              />
+            </div>
+            <span className="text-sm text-muted-foreground font-medium">
+              Your Balance
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span
+              className="font-display font-bold text-xl tabular-nums"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            >
+              {coinBalance !== undefined
+                ? Number(coinBalance).toLocaleString()
+                : "—"}
+            </span>
+            <span
+              className="text-xs font-semibold"
+              style={{ color: "oklch(0.82 0.18 85 / 0.65)" }}
+            >
+              DC
+            </span>
+          </div>
         </motion.div>
 
         {/* Earnings banner */}

@@ -1,6 +1,6 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TaskStatus, UserProfile } from "../backend.d";
+import type { TaskStatus } from "../backend.d";
 import { useActor } from "./useActor";
 
 // ─── Auth / Profile ────────────────────────────────────────────────────────
@@ -33,13 +33,30 @@ export function useSaveProfile() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (profile: UserProfile) => {
+    mutationFn: async (profile: {
+      email: string;
+      role: string;
+      isBlocked: boolean;
+    }) => {
       if (!actor) throw new Error("Not connected");
       return actor.saveCallerUserProfile(profile);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["callerProfile"] });
     },
+  });
+}
+
+export function useGetCoinBalance(userId: Principal | undefined) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["coinBalance", userId?.toString()],
+    queryFn: async () => {
+      if (!actor || !userId) return BigInt(0);
+      return actor.getCoinBalance(userId);
+    },
+    enabled: !!actor && !isFetching && !!userId,
+    refetchInterval: 30000, // refresh every 30s
   });
 }
 

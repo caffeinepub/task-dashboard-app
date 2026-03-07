@@ -33,6 +33,7 @@ export type TaskStatus = { 'pending' : null } |
   { 'approved' : null } |
   { 'declined' : null };
 export interface UserProfile {
+  'coinBalance' : bigint,
   'isBlocked' : boolean,
   'role' : string,
   'email' : string,
@@ -68,8 +69,10 @@ export interface _SERVICE {
   >,
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'addCoins' : ActorMethod<[Principal, bigint], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'blockUser' : ActorMethod<[Principal], undefined>,
+  'deductCoins' : ActorMethod<[Principal, bigint], undefined>,
   'getAllPayments' : ActorMethod<[], Array<PaymentRequest>>,
   'getAllSubmissions' : ActorMethod<[], Array<Submission>>,
   'getAllUsersAnalytics' : ActorMethod<
@@ -86,6 +89,7 @@ export interface _SERVICE {
   >,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getCoinBalance' : ActorMethod<[Principal], bigint>,
   'getTasks' : ActorMethod<[], Array<Task>>,
   'getUserAnalytics' : ActorMethod<
     [Principal],
@@ -103,7 +107,10 @@ export interface _SERVICE {
   'requestPayment' : ActorMethod<[bigint], undefined>,
   'reviewPayment' : ActorMethod<[bigint, boolean], undefined>,
   'reviewSubmission' : ActorMethod<[bigint, boolean], undefined>,
-  'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'saveCallerUserProfile' : ActorMethod<
+    [{ 'isBlocked' : boolean, 'role' : string, 'email' : string }],
+    undefined
+  >,
   'submitTask' : ActorMethod<[bigint, Blob], undefined>,
   'unblockUser' : ActorMethod<[Principal], undefined>,
   'updateTask' : ActorMethod<[bigint, string, [] | [Blob]], undefined>,

@@ -29,6 +29,7 @@ export interface Submission {
     taskId: bigint;
 }
 export interface UserProfile {
+    coinBalance: bigint;
     isBlocked: boolean;
     role: string;
     email: string;
@@ -49,8 +50,10 @@ export enum Variant_pending_accepted_declined {
     declined = "declined"
 }
 export interface backendInterface {
+    addCoins(userId: Principal, amount: bigint): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: Principal): Promise<void>;
+    deductCoins(userId: Principal, amount: bigint): Promise<void>;
     getAllPayments(): Promise<Array<PaymentRequest>>;
     getAllSubmissions(): Promise<Array<Submission>>;
     getAllUsersAnalytics(): Promise<Array<{
@@ -62,6 +65,7 @@ export interface backendInterface {
     }>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getCoinBalance(userId: Principal): Promise<bigint>;
     getTasks(): Promise<Array<Task>>;
     getUserAnalytics(userId: Principal): Promise<{
         tasksCompleted: bigint;
@@ -69,14 +73,18 @@ export interface backendInterface {
         lastLogin?: bigint;
     }>;
     getUserPayments(userId: Principal): Promise<Array<PaymentRequest>>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
+    getUserProfile(_user: Principal): Promise<UserProfile | null>;
     getUserSubmissions(userId: Principal): Promise<Array<Submission>>;
     isCallerAdmin(): Promise<boolean>;
     recordLastLogin(): Promise<void>;
     requestPayment(amount: bigint): Promise<void>;
     reviewPayment(paymentId: bigint, approve: boolean): Promise<void>;
     reviewSubmission(submissionId: bigint, approve: boolean): Promise<void>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    saveCallerUserProfile(profile: {
+        isBlocked: boolean;
+        role: string;
+        email: string;
+    }): Promise<void>;
     submitTask(taskId: bigint, file: Blob): Promise<void>;
     unblockUser(userId: Principal): Promise<void>;
     updateTask(taskId: bigint, title: string, image: Blob | null): Promise<void>;

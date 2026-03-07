@@ -118,6 +118,7 @@ export interface Submission {
     taskId: bigint;
 }
 export interface UserProfile {
+    coinBalance: bigint;
     isBlocked: boolean;
     role: string;
     email: string;
@@ -149,8 +150,10 @@ export interface backendInterface {
     _caffeineStorageRefillCashier(refillInformation: _CaffeineStorageRefillInformation | null): Promise<_CaffeineStorageRefillResult>;
     _caffeineStorageUpdateGatewayPrincipals(): Promise<void>;
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
+    addCoins(userId: Principal, amount: bigint): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: Principal): Promise<void>;
+    deductCoins(userId: Principal, amount: bigint): Promise<void>;
     getAllPayments(): Promise<Array<PaymentRequest>>;
     getAllSubmissions(): Promise<Array<Submission>>;
     getAllUsersAnalytics(): Promise<Array<{
@@ -162,6 +165,7 @@ export interface backendInterface {
     }>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getCoinBalance(userId: Principal): Promise<bigint>;
     getTasks(): Promise<Array<Task>>;
     getUserAnalytics(userId: Principal): Promise<{
         tasksCompleted: bigint;
@@ -169,14 +173,18 @@ export interface backendInterface {
         lastLogin?: bigint;
     }>;
     getUserPayments(userId: Principal): Promise<Array<PaymentRequest>>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
+    getUserProfile(_user: Principal): Promise<UserProfile | null>;
     getUserSubmissions(userId: Principal): Promise<Array<Submission>>;
     isCallerAdmin(): Promise<boolean>;
     recordLastLogin(): Promise<void>;
     requestPayment(amount: bigint): Promise<void>;
     reviewPayment(paymentId: bigint, approve: boolean): Promise<void>;
     reviewSubmission(submissionId: bigint, approve: boolean): Promise<void>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    saveCallerUserProfile(profile: {
+        isBlocked: boolean;
+        role: string;
+        email: string;
+    }): Promise<void>;
     submitTask(taskId: bigint, file: Blob): Promise<void>;
     unblockUser(userId: Principal): Promise<void>;
     updateTask(taskId: bigint, title: string, image: Blob | null): Promise<void>;
@@ -282,6 +290,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async addCoins(arg0: Principal, arg1: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.addCoins(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.addCoins(arg0, arg1);
+            return result;
+        }
+    }
     async assignCallerUserRole(arg0: Principal, arg1: UserRole): Promise<void> {
         if (this.processError) {
             try {
@@ -307,6 +329,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.blockUser(arg0);
+            return result;
+        }
+    }
+    async deductCoins(arg0: Principal, arg1: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deductCoins(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deductCoins(arg0, arg1);
             return result;
         }
     }
@@ -384,6 +420,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getCallerUserRole();
             return from_candid_UserRole_n23(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getCoinBalance(arg0: Principal): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getCoinBalance(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getCoinBalance(arg0);
+            return result;
         }
     }
     async getTasks(): Promise<Array<Task>> {
@@ -530,7 +580,11 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
+    async saveCallerUserProfile(arg0: {
+        isBlocked: boolean;
+        role: string;
+        email: string;
+    }): Promise<void> {
         if (this.processError) {
             try {
                 const result = await this.actor.saveCallerUserProfile(arg0);
