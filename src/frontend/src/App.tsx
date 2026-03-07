@@ -2,11 +2,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { Coins, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { AdminAuthGate } from "./components/app/AdminAuthGate";
 import { AuthScreen } from "./components/app/AuthScreen";
 import { BottomNav, type NavTab } from "./components/app/BottomNav";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useCallerProfile, useIsAdmin } from "./hooks/useQueries";
-import { AdminPage } from "./pages/AdminPage";
 import { HomePage } from "./pages/HomePage";
 import { ProfilePage } from "./pages/ProfilePage";
 
@@ -278,7 +278,7 @@ export default function App() {
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.25, ease: "easeOut" }}
               >
-                <AdminPage onBack={handleBackFromAdmin} />
+                <AdminAuthGate onBack={handleBackFromAdmin} />
               </motion.div>
             ) : activeTab === "home" ? (
               <motion.div

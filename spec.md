@@ -1,47 +1,31 @@
 # Dark Coin
 
 ## Current State
-No existing codebase. This is a new project.
+- Full app with Internet Identity auth, 6-task grid, and admin panel at `/admin`
+- Admin panel is directly accessible after login with no extra protection
+- App.tsx renders AdminPage when user clicks Admin tab or navigates to /admin
+- SplashScreen shown post-login for 3.5 seconds
+- Electric Gold dark theme with glassmorphic cards
 
 ## Requested Changes (Diff)
 
 ### Add
-- Internet Identity authentication with a post-login splash screen (3-4 seconds, Dark Coin logo + loading animation, fade-in transition to home)
-- Welcome message on login screen with professional fintech/crypto UI
-- Home page with 6-task grid (glassmorphism cards, mobile-first, no excessive scroll)
-- Each task card: image, title, status badge (Pending/Approved/Declined), Start button
-- Proof submission: bottom sheet for uploading screenshot/video as proof
-- Admin panel with 5 sections:
-  - User Management: list all registered users, freeze/unfreeze accounts
-  - Task Management: upload/edit 6 task images and start button links
-  - Verification System: approve/decline user proof submissions
-  - Payment Processing: accept/decline withdrawal requests
-  - Analytics: last login, tasks completed, stored data per user
-- Bottom navigation: Home, Profile, Admin
+- AdminAuthGate component that intercepts access to AdminPage
+- Step 1: 6-digit PIN entry screen (code: 09186114) with styled OTP-style input
+- Step 2: Face verification screen — activates device camera for 4 seconds, shows scanning animation (human/bot detection UI), then marks as verified
+- On successful PIN + face verify → session flag set → AdminPage rendered
+- Session resets when admin navigates away (back to home)
 
 ### Modify
-- N/A (new project)
+- App.tsx: wrap AdminPage render with AdminAuthGate; gate resets on handleBackFromAdmin
 
 ### Remove
-- N/A (new project)
+- Nothing removed
 
 ## Implementation Plan
-
-**Backend (Motoko):**
-- User registry: store principal, display name, email, freeze status, last login, join date
-- Task registry: 6 tasks with title, image blob, start link, ordering
-- Submission store: user proof uploads (blob reference, task ID, status: pending/approved/declined, timestamp)
-- Withdrawal requests: user ID, amount, status (pending/accepted/declined), timestamp
-- Admin role check: hardcode first principal as admin or use authorization component
-- Queries: getAllUsers, getUser, getTasks, getTask, getUserSubmissions, getAllSubmissions, getWithdrawals, getUserAnalytics
-- Updates: registerUser, updateUser, freezeUser, unfreezeUser, updateTask, submitProof, updateSubmissionStatus, requestWithdrawal, updateWithdrawalStatus
-
-**Frontend:**
-- Auth flow: II login -> splash screen (logo + spinner, 3-4s) -> fade into home
-- Login page: premium dark design, welcome copy, II button
-- Home page: 2-col mobile grid of 6 glassmorphism task cards
-- Task card: image/placeholder, title, status badge, Start button (opens proof sheet)
-- Proof upload sheet: file input (image/video), submit button
-- Profile page: display name, email, stats (tasks completed, pending)
-- Admin panel (/admin): tabs for Users, Tasks, Submissions, Payments, Analytics
-- Bottom nav with Home, Profile, Admin icons
+1. Create `src/frontend/src/components/app/AdminAuthGate.tsx`
+   - State machine: `"pin" | "face" | "verified"`
+   - PIN screen: OTP-style 8-digit input (styled electric-gold), validate against "09186114", show error on wrong code
+   - Face screen: access webcam via getUserMedia, show live video feed, overlay scanning ring animation for 4 seconds, progress bar, "Analyzing face..." text, then auto-advance to verified
+   - Transition to AdminPage on verified
+2. Update App.tsx: replace direct `<AdminPage>` render with `<AdminAuthGate onBack={handleBackFromAdmin} />` which internally shows AdminPage when verified; reset auth state on back
