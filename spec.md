@@ -1,63 +1,47 @@
-# Task Dashboard App
+# Dark Coin
 
 ## Current State
-New project. No existing code.
+No existing codebase. This is a new project.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Email + password authentication (Sign Up and Login screens)
-- Secure user sessions stored in Motoko backend
-- User Home Page with a 6-task grid (2 columns mobile, adapts on larger screens)
-- Task Cards showing a task image, title, task status badge (Pending/Approved/Declined), and a "Start" button
-- Task Detail view where users can upload a screenshot or video as proof of completion
-- Submission flow: upload proof -> sent to Admin Panel for review
-- Admin Panel (protected route, admin-only):
-  - View and manage all 6 tasks (upload/change images, update titles)
-  - View all user proof-of-task submissions
-  - Approve or Decline each submission
-  - Block or Unblock users
-- User Profile screen (bottom nav tab)
-- Bottom navigation bar for mobile (Home, Profile)
-- Smooth page transitions
+- Internet Identity authentication with a post-login splash screen (3-4 seconds, Dark Coin logo + loading animation, fade-in transition to home)
+- Welcome message on login screen with professional fintech/crypto UI
+- Home page with 6-task grid (glassmorphism cards, mobile-first, no excessive scroll)
+- Each task card: image, title, status badge (Pending/Approved/Declined), Start button
+- Proof submission: bottom sheet for uploading screenshot/video as proof
+- Admin panel with 5 sections:
+  - User Management: list all registered users, freeze/unfreeze accounts
+  - Task Management: upload/edit 6 task images and start button links
+  - Verification System: approve/decline user proof submissions
+  - Payment Processing: accept/decline withdrawal requests
+  - Analytics: last login, tasks completed, stored data per user
+- Bottom navigation: Home, Profile, Admin
 
 ### Modify
-None (new project).
+- N/A (new project)
 
 ### Remove
-None (new project).
+- N/A (new project)
 
 ## Implementation Plan
 
-### Backend (Motoko)
-- User entity: id, email, hashed password, role (admin | user), blocked flag
-- Session management: token-based session stored in backend
-- Task entity: id, title, imageBlob (stored via blob-storage component), status
-- Submission entity: id, userId, taskId, fileBlob (blob-storage), status (pending | approved | declined), timestamp
-- Endpoints:
-  - `signUp(email, password)` -> session token
-  - `login(email, password)` -> session token
-  - `logout(token)`
-  - `getMe(token)` -> User
-  - `getTasks()` -> [Task]
-  - `submitProof(token, taskId, fileBlob)` -> Submission
-  - `getMySubmissions(token)` -> [Submission]
-  - `getAllSubmissions(token)` -> [Submission] (admin only)
-  - `approveSubmission(token, submissionId)` (admin only)
-  - `declineSubmission(token, submissionId)` (admin only)
-  - `updateTask(token, taskId, title, imageBlob)` (admin only)
-  - `blockUser(token, userId)` (admin only)
-  - `unblockUser(token, userId)` (admin only)
-  - `getAllUsers(token)` -> [User] (admin only)
-  - Seed one admin account on first deploy
+**Backend (Motoko):**
+- User registry: store principal, display name, email, freeze status, last login, join date
+- Task registry: 6 tasks with title, image blob, start link, ordering
+- Submission store: user proof uploads (blob reference, task ID, status: pending/approved/declined, timestamp)
+- Withdrawal requests: user ID, amount, status (pending/accepted/declined), timestamp
+- Admin role check: hardcode first principal as admin or use authorization component
+- Queries: getAllUsers, getUser, getTasks, getTask, getUserSubmissions, getAllSubmissions, getWithdrawals, getUserAnalytics
+- Updates: registerUser, updateUser, freezeUser, unfreezeUser, updateTask, submitProof, updateSubmissionStatus, requestWithdrawal, updateWithdrawalStatus
 
-### Frontend (React + TypeScript + Tailwind)
-- Auth screens: SignUp, Login (full-screen, mobile-first)
-- Home screen: responsive task grid, task cards with image, title, status badge, Start button
-- Task Detail sheet/modal: file upload (image/video), submit button, status feedback
-- Admin Panel: task manager, submission reviewer, user manager tabs
-- Profile screen: display user info, logout button
-- Bottom navigation bar (Home, Profile) for mobile
-- React Router for routing with protected routes
-- Smooth CSS transitions between views
-- Material Design-inspired: rounded corners, card shadows, clean typography
+**Frontend:**
+- Auth flow: II login -> splash screen (logo + spinner, 3-4s) -> fade into home
+- Login page: premium dark design, welcome copy, II button
+- Home page: 2-col mobile grid of 6 glassmorphism task cards
+- Task card: image/placeholder, title, status badge, Start button (opens proof sheet)
+- Proof upload sheet: file input (image/video), submit button
+- Profile page: display name, email, stats (tasks completed, pending)
+- Admin panel (/admin): tabs for Users, Tasks, Submissions, Payments, Analytics
+- Bottom nav with Home, Profile, Admin icons

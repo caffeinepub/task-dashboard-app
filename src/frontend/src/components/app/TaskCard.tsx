@@ -143,8 +143,8 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
                 }
               : {
                   background:
-                    "linear-gradient(135deg, oklch(0.75 0.18 195 / 0.9), oklch(0.7 0.2 220 / 0.9))",
-                  color: "oklch(0.1 0.02 260)",
+                    "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.9), oklch(0.75 0.15 80 / 0.9))",
+                  color: "oklch(0.1 0.02 85)",
                 }
           }
         >

@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
-import { Loader2 } from "lucide-react";
+import { Coins, Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthScreen } from "./components/app/AuthScreen";
 import { BottomNav, type NavTab } from "./components/app/BottomNav";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
@@ -9,6 +9,118 @@ import { useCallerProfile, useIsAdmin } from "./hooks/useQueries";
 import { AdminPage } from "./pages/AdminPage";
 import { HomePage } from "./pages/HomePage";
 import { ProfilePage } from "./pages/ProfilePage";
+
+// ── Splash Screen Component ───────────────────────────────────────────────────
+
+function SplashScreen() {
+  return (
+    <motion.div
+      key="splash"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, ease: "easeInOut" }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background"
+    >
+      {/* Background glow */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 50% 50%, oklch(0.82 0.18 85 / 0.08) 0%, transparent 70%)",
+        }}
+      />
+      {/* Subtle grid */}
+      <div
+        className="absolute inset-0 opacity-[0.02] pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(oklch(0.82 0.18 85) 1px, transparent 1px),
+            linear-gradient(90deg, oklch(0.82 0.18 85) 1px, transparent 1px)
+          `,
+          backgroundSize: "60px 60px",
+        }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.75, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: "easeOut" }}
+        className="flex flex-col items-center gap-7 relative z-10"
+      >
+        {/* Gold coin logo */}
+        <motion.div
+          animate={{
+            boxShadow: [
+              "0 0 20px oklch(0.82 0.18 85 / 0.4), 0 0 40px oklch(0.82 0.18 85 / 0.2)",
+              "0 0 50px oklch(0.82 0.18 85 / 0.7), 0 0 80px oklch(0.82 0.18 85 / 0.4)",
+              "0 0 20px oklch(0.82 0.18 85 / 0.4), 0 0 40px oklch(0.82 0.18 85 / 0.2)",
+            ],
+          }}
+          transition={{
+            duration: 2,
+            repeat: Number.POSITIVE_INFINITY,
+            ease: "easeInOut",
+          }}
+          className="w-32 h-32 rounded-3xl flex items-center justify-center"
+          style={{
+            background:
+              "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.2), oklch(0.7 0.12 80 / 0.1))",
+            border: "2px solid oklch(0.82 0.18 85 / 0.5)",
+          }}
+        >
+          <Coins
+            className="w-16 h-16"
+            style={{ color: "oklch(0.82 0.18 85)" }}
+          />
+        </motion.div>
+
+        {/* App name */}
+        <div className="text-center space-y-1.5">
+          <motion.h1
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+            className="font-display text-5xl font-bold tracking-tight"
+            style={{ color: "oklch(0.82 0.18 85)" }}
+          >
+            Dark Coin
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.35 }}
+            className="text-muted-foreground text-sm tracking-wide"
+          >
+            Complete tasks. Earn Dark Coin.
+          </motion.p>
+        </div>
+
+        {/* Progress bar */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="flex flex-col items-center gap-2.5 w-64"
+        >
+          <div className="w-full h-1.5 rounded-full overflow-hidden bg-secondary/60">
+            <div
+              className="h-full rounded-full splash-progress"
+              style={{
+                background:
+                  "linear-gradient(90deg, oklch(0.82 0.18 85), oklch(0.92 0.1 90))",
+              }}
+            />
+          </div>
+          <p className="text-muted-foreground text-xs tracking-widest animate-pulse uppercase">
+            Loading…
+          </p>
+        </motion.div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const { identity, isInitializing, loginStatus } = useInternetIdentity();
@@ -19,6 +131,23 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<NavTab>("home");
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showSplash, setShowSplash] = useState(false);
+
+  // Track whether the user was previously unauthenticated (for detecting fresh login)
+  const prevAuthRef = useRef(false);
+
+  // When user transitions from unauthenticated → authenticated + has profile → show splash
+  useEffect(() => {
+    if (!prevAuthRef.current && isAuthenticated && profile) {
+      setShowSplash(true);
+      const timer = setTimeout(() => setShowSplash(false), 3500);
+      prevAuthRef.current = true;
+      return () => clearTimeout(timer);
+    }
+    if (isAuthenticated) {
+      prevAuthRef.current = true;
+    }
+  }, [isAuthenticated, profile]);
 
   // Route to admin when admin tab selected
   useEffect(() => {
@@ -41,28 +170,38 @@ export default function App() {
     setActiveTab("home");
   };
 
-  // Loading state while initializing auth
+  // ── Loading state while initializing auth ─────────────────────────────────
   if (isInitializing || loginStatus === "initializing") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-5">
           <div
             className="w-16 h-16 rounded-2xl flex items-center justify-center"
             style={{
               background:
-                "linear-gradient(135deg, oklch(0.75 0.18 195 / 0.2), oklch(0.7 0.2 300 / 0.2))",
-              border: "1px solid oklch(0.75 0.18 195 / 0.3)",
+                "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.2), oklch(0.75 0.15 80 / 0.1))",
+              border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+              boxShadow: "0 0 20px oklch(0.82 0.18 85 / 0.2)",
             }}
           >
-            <Loader2 className="w-7 h-7 text-primary animate-spin" />
+            <Coins
+              className="w-7 h-7"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
           </div>
-          <p className="text-muted-foreground text-sm">Initializing…</p>
+          <div className="flex flex-col items-center gap-1.5">
+            <Loader2
+              className="w-5 h-5 animate-spin"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+            <p className="text-muted-foreground text-sm">Initializing…</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Not authenticated → show auth screen
+  // ── Not authenticated → show auth screen ─────────────────────────────────
   if (!isAuthenticated) {
     return (
       <>
@@ -71,9 +210,9 @@ export default function App() {
           position="top-center"
           toastOptions={{
             style: {
-              background: "oklch(0.19 0.025 265)",
-              border: "1px solid oklch(0.28 0.04 265 / 0.6)",
-              color: "oklch(0.95 0.01 260)",
+              background: "oklch(0.14 0.015 265)",
+              border: "1px solid oklch(0.24 0.03 265 / 0.6)",
+              color: "oklch(0.96 0.008 80)",
             },
           }}
         />
@@ -81,19 +220,22 @@ export default function App() {
     );
   }
 
-  // Still loading profile
+  // ── Still loading profile ─────────────────────────────────────────────────
   if (profileLoading || adminLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <Loader2
+            className="w-8 h-8 animate-spin"
+            style={{ color: "oklch(0.82 0.18 85)" }}
+          />
           <p className="text-muted-foreground text-sm">Loading your profile…</p>
         </div>
       </div>
     );
   }
 
-  // Authenticated but no profile → show profile setup
+  // ── Authenticated but no profile → show profile setup ────────────────────
   if (!profile) {
     return (
       <>
@@ -107,9 +249,9 @@ export default function App() {
           position="top-center"
           toastOptions={{
             style: {
-              background: "oklch(0.19 0.025 265)",
-              border: "1px solid oklch(0.28 0.04 265 / 0.6)",
-              color: "oklch(0.95 0.01 260)",
+              background: "oklch(0.14 0.015 265)",
+              border: "1px solid oklch(0.24 0.03 265 / 0.6)",
+              color: "oklch(0.96 0.008 80)",
             },
           }}
         />
@@ -121,6 +263,9 @@ export default function App() {
 
   return (
     <>
+      {/* Splash screen overlay (post-login) */}
+      <AnimatePresence>{showSplash && <SplashScreen />}</AnimatePresence>
+
       <div className="min-h-screen bg-background">
         {/* Max-width container for main screens */}
         <div className={showAdmin ? "w-full" : "max-w-lg mx-auto"}>
@@ -182,9 +327,9 @@ export default function App() {
         position="top-center"
         toastOptions={{
           style: {
-            background: "oklch(0.19 0.025 265)",
-            border: "1px solid oklch(0.28 0.04 265 / 0.6)",
-            color: "oklch(0.95 0.01 260)",
+            background: "oklch(0.14 0.015 265)",
+            border: "1px solid oklch(0.24 0.03 265 / 0.6)",
+            color: "oklch(0.96 0.008 80)",
           },
         }}
       />

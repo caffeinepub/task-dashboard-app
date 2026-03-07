@@ -6,7 +6,12 @@ import type { Principal } from "@icp-sdk/core/principal";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  BarChart3,
   Check,
+  CheckCircle,
+  Clock,
+  Coins,
+  CreditCard,
   Film,
   ImageOff,
   Loader2,
@@ -14,6 +19,7 @@ import {
   ShieldOff,
   Upload,
   User,
+  Users,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -42,6 +48,7 @@ interface AdminPageProps {
 function AdminTaskRow({ task, index }: { task: Task; index: number }) {
   const updateTask = useUpdateTask();
   const [title, setTitle] = useState(task.title);
+  const [startLink, setStartLink] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<Uint8Array | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -99,9 +106,15 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
       </div>
 
       {/* Fields */}
-      <div className="flex-1 w-full space-y-3">
-        <div className="flex items-center gap-1 mb-1">
-          <span className="text-xs text-muted-foreground font-medium">
+      <div className="flex-1 w-full space-y-2.5">
+        <div className="flex items-center gap-1 mb-0.5">
+          <span
+            className="text-xs font-bold px-2 py-0.5 rounded-full"
+            style={{
+              background: "oklch(0.82 0.18 85 / 0.12)",
+              color: "oklch(0.82 0.18 85)",
+            }}
+          >
             Task {index + 1}
           </span>
         </div>
@@ -109,6 +122,12 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Task title"
+          className="h-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
+        />
+        <Input
+          value={startLink}
+          onChange={(e) => setStartLink(e.target.value)}
+          placeholder="Start link (URL)"
           className="h-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
         />
         <div className="flex gap-2">
@@ -120,7 +139,7 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
             className="rounded-xl text-xs h-8 border-border/40"
           >
             <Upload className="w-3 h-3 mr-1.5" />
-            Change Image
+            Image
           </Button>
           <Button
             data-ocid={`admin.task.save_button.${index + 1}`}
@@ -130,8 +149,8 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
             className="rounded-xl text-xs h-8 btn-glow"
             style={{
               background:
-                "linear-gradient(135deg, oklch(0.75 0.18 195), oklch(0.7 0.2 220))",
-              color: "oklch(0.1 0.02 260)",
+                "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+              color: "oklch(0.1 0.02 85)",
             }}
           >
             {updateTask.isPending ? (
@@ -166,7 +185,6 @@ function SubmissionRow({ sub, index }: { sub: Submission; index: number }) {
 
   useEffect(() => {
     if (sub.file && sub.file.length > 0) {
-      // Try to detect if it's a video based on magic bytes
       const header = sub.file.slice(0, 4);
       const isVid =
         (header[0] === 0x00 && header[1] === 0x00 && header[2] === 0x00) ||
@@ -329,9 +347,12 @@ function UserRow({
       {/* Avatar */}
       <div
         className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: "oklch(var(--accent) / 0.5)" }}
+        style={{ background: "oklch(0.82 0.18 85 / 0.1)" }}
       >
-        <User className="w-5 h-5 text-muted-foreground" />
+        <User
+          className="w-5 h-5"
+          style={{ color: "oklch(0.82 0.18 85 / 0.7)" }}
+        />
       </div>
 
       {/* Info */}
@@ -394,6 +415,96 @@ function UserRow({
   );
 }
 
+// ─── Analytics User Card ────────────────────────────────────────────────────
+
+function AnalyticsUserCard({
+  principal,
+  submissions,
+  index,
+}: {
+  principal: Principal;
+  submissions: Submission[];
+  index: number;
+}) {
+  const { actor } = useActor();
+  const { data: userProfile } = useQuery({
+    queryKey: ["userProfile", principal.toString()],
+    queryFn: async () => {
+      if (!actor) return null;
+      return actor.getUserProfile(principal);
+    },
+    enabled: !!actor,
+  });
+
+  const principalStr = principal.toString();
+  const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
+
+  const userSubmissions = submissions.filter(
+    (s) => s.userId.toString() === principalStr,
+  );
+  const approved = userSubmissions.filter(
+    (s) => String(s.status) === "approved",
+  ).length;
+  const pending = userSubmissions.filter(
+    (s) => String(s.status) === "pending",
+  ).length;
+  const displayName = userProfile?.email?.split("@")[0] ?? shortPrincipal;
+
+  return (
+    <div
+      data-ocid={`admin.analytics.item.${index + 1}`}
+      className="glass-card rounded-2xl p-4 space-y-3"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
+          style={{
+            background: "oklch(0.82 0.18 85 / 0.15)",
+            color: "oklch(0.82 0.18 85)",
+          }}
+        >
+          {displayName.charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground truncate">
+            {userProfile?.email ?? shortPrincipal}
+          </p>
+          <p className="text-xs font-mono text-muted-foreground truncate">
+            {shortPrincipal}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl p-2.5 text-center bg-secondary/40">
+          <p className="font-bold text-foreground text-base">
+            {userSubmissions.length}
+          </p>
+          <p className="text-muted-foreground text-[10px]">Total</p>
+        </div>
+        <div className="rounded-xl p-2.5 text-center bg-secondary/40">
+          <p
+            className="font-bold text-base"
+            style={{ color: "oklch(var(--success))" }}
+          >
+            {approved}
+          </p>
+          <p className="text-muted-foreground text-[10px]">Approved</p>
+        </div>
+        <div className="rounded-xl p-2.5 text-center bg-secondary/40">
+          <p
+            className="font-bold text-base"
+            style={{ color: "oklch(var(--warning))" }}
+          >
+            {pending}
+          </p>
+          <p className="text-muted-foreground text-[10px]">Pending</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Admin Page ─────────────────────────────────────────────────────────────
 
 export function AdminPage({ onBack }: AdminPageProps) {
@@ -409,15 +520,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
       ]
     : [];
 
+  const pendingSubmissions =
+    submissions?.filter((s) => String(s.status) === "pending").length ?? 0;
+
   return (
     <div data-ocid="admin.page" className="page-enter min-h-screen">
       {/* Header */}
       <header
         className="sticky top-0 z-40 px-4 py-3 flex items-center gap-3"
         style={{
-          background: "oklch(0.13 0.02 260 / 0.9)",
-          backdropFilter: "blur(12px)",
-          borderBottom: "1px solid oklch(0.28 0.04 265 / 0.4)",
+          background: "oklch(0.09 0.01 260 / 0.92)",
+          backdropFilter: "blur(16px)",
+          borderBottom: "1px solid oklch(0.82 0.18 85 / 0.12)",
         }}
       >
         <Button
@@ -428,47 +542,104 @@ export function AdminPage({ onBack }: AdminPageProps) {
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <div>
-          <h1 className="font-display font-bold text-lg text-foreground leading-none">
-            Admin Panel
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Manage tasks and users
-          </p>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{
+              background: "oklch(0.82 0.18 85 / 0.15)",
+              border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+            }}
+          >
+            <Coins
+              className="w-3.5 h-3.5"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+          </div>
+          <div>
+            <h1 className="font-display font-bold text-lg text-foreground leading-none">
+              Admin Panel
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Dark Coin management
+            </p>
+          </div>
         </div>
       </header>
 
       {/* Tabs */}
       <div className="px-4 pt-4 pb-8">
         <Tabs defaultValue="tasks" className="w-full">
-          <TabsList className="w-full rounded-2xl mb-4 h-10 p-1 bg-secondary/40">
-            <TabsTrigger
-              data-ocid="admin.tasks_tab"
-              value="tasks"
-              className="flex-1 rounded-xl text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              Tasks
-            </TabsTrigger>
-            <TabsTrigger
-              data-ocid="admin.submissions_tab"
-              value="submissions"
-              className="flex-1 rounded-xl text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              Submissions
-              {submissions && submissions.length > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] bg-primary/20 text-primary font-bold">
-                  {submissions.length}
+          {/* Tab list — scrollable on mobile */}
+          <div className="overflow-x-auto mb-4 -mx-4 px-4">
+            <TabsList className="flex w-max min-w-full rounded-2xl h-10 p-1 bg-secondary/40 gap-0.5">
+              <TabsTrigger
+                data-ocid="admin.tasks_tab"
+                value="tasks"
+                className="flex-1 min-w-[70px] rounded-xl text-xs font-semibold data-[state=active]:text-primary-foreground whitespace-nowrap"
+                style={
+                  {
+                    "--active-bg": "oklch(0.82 0.18 85)",
+                  } as React.CSSProperties
+                }
+              >
+                <span className="flex items-center gap-1">
+                  <Upload className="w-3 h-3" />
+                  Tasks
                 </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              data-ocid="admin.users_tab"
-              value="users"
-              className="flex-1 rounded-xl text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              Users
-            </TabsTrigger>
-          </TabsList>
+              </TabsTrigger>
+              <TabsTrigger
+                data-ocid="admin.submissions_tab"
+                value="submissions"
+                className="flex-1 min-w-[90px] rounded-xl text-xs font-semibold data-[state=active]:text-primary-foreground whitespace-nowrap"
+              >
+                <span className="flex items-center gap-1">
+                  <Film className="w-3 h-3" />
+                  Proofs
+                  {pendingSubmissions > 0 && (
+                    <span
+                      className="ml-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+                      style={{
+                        background: "oklch(0.82 0.18 85 / 0.2)",
+                        color: "oklch(0.82 0.18 85)",
+                      }}
+                    >
+                      {pendingSubmissions}
+                    </span>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger
+                data-ocid="admin.users_tab"
+                value="users"
+                className="flex-1 min-w-[70px] rounded-xl text-xs font-semibold data-[state=active]:text-primary-foreground whitespace-nowrap"
+              >
+                <span className="flex items-center gap-1">
+                  <Users className="w-3 h-3" />
+                  Users
+                </span>
+              </TabsTrigger>
+              <TabsTrigger
+                data-ocid="admin.payments_tab"
+                value="payments"
+                className="flex-1 min-w-[80px] rounded-xl text-xs font-semibold data-[state=active]:text-primary-foreground whitespace-nowrap"
+              >
+                <span className="flex items-center gap-1">
+                  <CreditCard className="w-3 h-3" />
+                  Payments
+                </span>
+              </TabsTrigger>
+              <TabsTrigger
+                data-ocid="admin.analytics_tab"
+                value="analytics"
+                className="flex-1 min-w-[80px] rounded-xl text-xs font-semibold data-[state=active]:text-primary-foreground whitespace-nowrap"
+              >
+                <span className="flex items-center gap-1">
+                  <BarChart3 className="w-3 h-3" />
+                  Analytics
+                </span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ── Tasks Tab ── */}
           <TabsContent value="tasks" className="space-y-3 mt-0">
@@ -476,7 +647,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               ? ["t1", "t2", "t3"].map((k) => (
                   <Skeleton
                     key={k}
-                    className="h-28 rounded-2xl skeleton-shimmer"
+                    className="h-36 rounded-2xl skeleton-shimmer"
                   />
                 ))
               : tasks?.map((task, i) => (
@@ -540,6 +711,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               >
                 <User className="w-10 h-10 text-muted-foreground mb-3 opacity-40" />
                 <p className="text-muted-foreground text-sm">No users yet</p>
+                <p className="text-muted-foreground text-xs mt-1">
+                  Users appear here when they submit tasks
+                </p>
               </div>
             ) : (
               uniqueUsers.map((principal, i) => (
@@ -553,6 +727,175 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </motion.div>
               ))
             )}
+          </TabsContent>
+
+          {/* ── Payments Tab ── */}
+          <TabsContent value="payments" className="mt-0">
+            <div
+              data-ocid="admin.payments.panel"
+              className="glass-card rounded-2xl p-6 flex flex-col items-center text-center gap-4"
+              style={{ border: "1px solid oklch(0.82 0.18 85 / 0.1)" }}
+            >
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                style={{
+                  background: "oklch(0.82 0.18 85 / 0.1)",
+                  border: "1px solid oklch(0.82 0.18 85 / 0.2)",
+                }}
+              >
+                <CreditCard
+                  className="w-8 h-8"
+                  style={{ color: "oklch(0.82 0.18 85 / 0.7)" }}
+                />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-foreground text-base mb-1">
+                  Payment Processing
+                </h3>
+                <p className="text-muted-foreground text-sm max-w-xs">
+                  Payment processing is coming soon. Withdrawal requests from
+                  users will appear here for review.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Feature coming soon</span>
+              </div>
+
+              {/* Summary stats from submissions */}
+              <div className="w-full grid grid-cols-3 gap-2 mt-2">
+                {[
+                  {
+                    label: "Total Users",
+                    value: uniqueUsers.length,
+                    Icon: Users,
+                  },
+                  {
+                    label: "Approved Tasks",
+                    value:
+                      submissions?.filter(
+                        (s) => String(s.status) === "approved",
+                      ).length ?? 0,
+                    Icon: CheckCircle,
+                  },
+                  {
+                    label: "Pending Review",
+                    value: pendingSubmissions,
+                    Icon: Clock,
+                  },
+                ].map(({ label, value, Icon }) => (
+                  <div
+                    key={label}
+                    className="rounded-xl p-3 text-center bg-secondary/40"
+                  >
+                    <Icon
+                      className="w-4 h-4 mx-auto mb-1.5"
+                      style={{ color: "oklch(0.82 0.18 85 / 0.6)" }}
+                    />
+                    <p className="font-bold text-foreground text-lg">{value}</p>
+                    <p className="text-muted-foreground text-[10px]">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ── Analytics Tab ── */}
+          <TabsContent value="analytics" className="space-y-4 mt-0">
+            {/* Overall stats */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                {
+                  label: "Total Users",
+                  value: uniqueUsers.length,
+                  Icon: Users,
+                  color: "0.82 0.18 85",
+                },
+                {
+                  label: "Total Submissions",
+                  value: submissions?.length ?? 0,
+                  Icon: Film,
+                  color: "0.75 0.18 195",
+                },
+                {
+                  label: "Approved",
+                  value:
+                    submissions?.filter((s) => String(s.status) === "approved")
+                      .length ?? 0,
+                  Icon: CheckCircle,
+                  color: "0.72 0.18 155",
+                },
+                {
+                  label: "Pending",
+                  value: pendingSubmissions,
+                  Icon: Clock,
+                  color: "0.82 0.18 80",
+                },
+              ].map(({ label, value, Icon, color }) => (
+                <div
+                  key={label}
+                  className="glass-card rounded-2xl p-4 text-center"
+                >
+                  <Icon
+                    className="w-5 h-5 mx-auto mb-2"
+                    style={{ color: `oklch(${color} / 0.8)` }}
+                  />
+                  <p className="font-display font-bold text-2xl text-foreground">
+                    {value}
+                  </p>
+                  <p className="text-muted-foreground text-xs mt-0.5">
+                    {label}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* User breakdown */}
+            <div>
+              <h3 className="font-semibold text-foreground text-sm mb-3 px-1 flex items-center gap-2">
+                <BarChart3
+                  className="w-4 h-4"
+                  style={{ color: "oklch(0.82 0.18 85)" }}
+                />
+                User Activity
+              </h3>
+
+              {subsLoading ? (
+                ["a1", "a2", "a3"].map((k) => (
+                  <Skeleton
+                    key={k}
+                    className="h-24 rounded-2xl skeleton-shimmer mb-3"
+                  />
+                ))
+              ) : uniqueUsers.length === 0 ? (
+                <div
+                  data-ocid="admin.analytics.empty_state"
+                  className="glass-card rounded-2xl flex flex-col items-center justify-center py-12 text-center"
+                >
+                  <BarChart3 className="w-8 h-8 text-muted-foreground mb-3 opacity-40" />
+                  <p className="text-muted-foreground text-sm">
+                    No activity data yet
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {uniqueUsers.map((principal, i) => (
+                    <motion.div
+                      key={principal.toString()}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                    >
+                      <AnalyticsUserCard
+                        principal={principal}
+                        submissions={submissions ?? []}
+                        index={i}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

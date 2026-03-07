@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, Zap } from "lucide-react";
+import { Coins, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -18,7 +18,9 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
     useInternetIdentity();
   const saveProfile = useSaveProfile();
   const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [setupStep, setSetupStep] = useState(false);
+  const [showSplash, setShowSplash] = useState(false);
 
   const isConnected = !!identity;
 
@@ -27,6 +29,10 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
   };
 
   const handleSaveProfile = async () => {
+    if (!displayName.trim()) {
+      toast.error("Please enter your display name");
+      return;
+    }
     if (!email.trim() || !email.includes("@")) {
       toast.error("Please enter a valid email address");
       return;
@@ -37,8 +43,13 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
         role: "user",
         isBlocked: false,
       });
-      toast.success("Profile saved! Welcome aboard.");
-      onProfileSaved();
+      toast.success("Welcome to Dark Coin!");
+      // Show splash screen for 3.5s
+      setShowSplash(true);
+      setTimeout(() => {
+        setShowSplash(false);
+        onProfileSaved();
+      }, 3500);
     } catch {
       toast.error("Failed to save profile. Please try again.");
     }
@@ -52,22 +63,102 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
     setSetupStep(true);
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* Background decorative elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+  // ── Splash screen (after profile save) ────────────────────────────────────
+  if (showSplash) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background">
+        {/* Background radial glow */}
         <div
-          className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full opacity-10"
+          className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(circle, oklch(0.75 0.18 195) 0%, transparent 70%)",
+              "radial-gradient(ellipse 60% 50% at 50% 50%, oklch(0.82 0.18 85 / 0.08) 0%, transparent 70%)",
           }}
         />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="flex flex-col items-center gap-6 relative z-10"
+        >
+          {/* Gold coin logo */}
+          <div
+            className="w-28 h-28 rounded-3xl flex items-center justify-center gold-pulse"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.25), oklch(0.75 0.15 80 / 0.15))",
+              border: "2px solid oklch(0.82 0.18 85 / 0.5)",
+            }}
+          >
+            <Coins
+              className="w-14 h-14"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+          </div>
+
+          {/* App name */}
+          <div className="text-center">
+            <h1
+              className="font-display text-4xl font-bold tracking-tight"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            >
+              Dark Coin
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Complete tasks. Earn Dark Coin.
+            </p>
+          </div>
+
+          {/* Circular loading indicator */}
+          <div className="flex flex-col items-center gap-3 w-56">
+            <div className="w-full h-1.5 rounded-full bg-secondary/60 overflow-hidden">
+              <div
+                className="h-full rounded-full splash-progress"
+                style={{
+                  background:
+                    "linear-gradient(90deg, oklch(0.82 0.18 85), oklch(0.9 0.12 90))",
+                }}
+              />
+            </div>
+            <p className="text-muted-foreground text-xs tracking-wide animate-pulse">
+              Loading your workspace…
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Large gold radial glow */}
         <div
-          className="absolute bottom-1/4 left-1/4 w-64 h-64 rounded-full opacity-5"
+          className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
           style={{
             background:
-              "radial-gradient(circle, oklch(0.7 0.2 300) 0%, transparent 70%)",
+              "radial-gradient(circle, oklch(0.82 0.18 85 / 0.07) 0%, transparent 65%)",
+          }}
+        />
+        {/* Secondary accent */}
+        <div
+          className="absolute bottom-0 right-0 w-80 h-80 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, oklch(0.72 0.18 155 / 0.04) 0%, transparent 70%)",
+          }}
+        />
+        {/* Subtle grid lines */}
+        <div
+          className="absolute inset-0 opacity-[0.025]"
+          style={{
+            backgroundImage: `
+              linear-gradient(oklch(0.82 0.18 85) 1px, transparent 1px),
+              linear-gradient(90deg, oklch(0.82 0.18 85) 1px, transparent 1px)
+            `,
+            backgroundSize: "60px 60px",
           }}
         />
       </div>
@@ -76,39 +167,49 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className="w-full max-w-sm relative"
+        className="w-full max-w-sm relative z-10"
       >
         {/* Logo / App name */}
         <div className="text-center mb-8">
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={{ scale: 0.7, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1, duration: 0.3 }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+            transition={{
+              delay: 0.1,
+              duration: 0.4,
+              type: "spring",
+              stiffness: 200,
+            }}
+            className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5"
             style={{
               background:
-                "linear-gradient(135deg, oklch(0.75 0.18 195 / 0.2), oklch(0.7 0.2 300 / 0.2))",
-              border: "1px solid oklch(0.75 0.18 195 / 0.3)",
-              boxShadow: "0 0 24px oklch(0.75 0.18 195 / 0.2)",
+                "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.2), oklch(0.75 0.15 80 / 0.1))",
+              border: "1.5px solid oklch(0.82 0.18 85 / 0.4)",
+              boxShadow: "0 0 32px oklch(0.82 0.18 85 / 0.25)",
             }}
           >
-            <Zap className="w-8 h-8 text-primary" />
+            <Coins
+              className="w-10 h-10"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
           </motion.div>
+
           <motion.h1
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="font-display text-3xl font-bold text-foreground tracking-tight"
+            className="font-display text-4xl font-bold tracking-tight"
+            style={{ color: "oklch(0.82 0.18 85)" }}
           >
-            TaskFlow
+            Dark Coin
           </motion.h1>
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="text-muted-foreground text-sm mt-1"
+            className="text-muted-foreground text-sm mt-1.5"
           >
-            Complete tasks. Earn rewards.
+            Complete tasks. Earn Dark Coin.
           </motion.p>
         </div>
 
@@ -118,17 +219,20 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.4 }}
           className="glass-card rounded-3xl p-6"
+          style={{
+            border: "1px solid oklch(0.82 0.18 85 / 0.12)",
+          }}
         >
           {!showSetup ? (
             <>
               <div className="text-center mb-6">
-                <h2 className="font-display text-xl font-semibold text-foreground">
-                  {isConnected ? "Setting up your account…" : "Get Started"}
+                <h2 className="font-display text-xl font-bold text-foreground">
+                  Welcome to Dark Coin
                 </h2>
                 <p className="text-muted-foreground text-sm mt-1">
                   {isConnected
-                    ? "Just a moment"
-                    : "Connect your Internet Identity to continue"}
+                    ? "Setting up your account…"
+                    : "Sign in to start earning rewards"}
                 </p>
               </div>
 
@@ -136,18 +240,21 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
               {!isConnected && (
                 <div className="space-y-3 mb-6">
                   {[
-                    "Complete curated tasks",
+                    "Complete curated earning tasks",
                     "Upload proof of completion",
-                    "Track your progress",
+                    "Track your Dark Coin earnings",
                   ].map((feat, i) => (
                     <motion.div
                       key={feat}
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + i * 0.08 }}
+                      transition={{ delay: 0.35 + i * 0.08 }}
                       className="flex items-center gap-3 text-sm text-muted-foreground"
                     >
-                      <ShieldCheck className="w-4 h-4 text-primary flex-shrink-0" />
+                      <ShieldCheck
+                        className="w-4 h-4 flex-shrink-0"
+                        style={{ color: "oklch(0.82 0.18 85)" }}
+                      />
                       {feat}
                     </motion.div>
                   ))}
@@ -158,11 +265,11 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
                 data-ocid="auth.primary_button"
                 onClick={handleLogin}
                 disabled={isLoggingIn || isInitializing || isConnected}
-                className="w-full h-12 font-semibold text-base rounded-2xl btn-glow transition-all duration-200"
+                className="w-full h-12 font-bold text-base rounded-2xl btn-glow transition-all duration-200"
                 style={{
                   background:
-                    "linear-gradient(135deg, oklch(0.75 0.18 195), oklch(0.7 0.2 220))",
-                  color: "oklch(0.1 0.02 260)",
+                    "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                  color: "oklch(0.1 0.02 85)",
                 }}
               >
                 {isLoggingIn || isInitializing ? (
@@ -171,7 +278,10 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
                     {isInitializing ? "Initializing…" : "Connecting…"}
                   </>
                 ) : (
-                  "Sign In with Internet Identity"
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Sign In with Internet Identity
+                  </>
                 )}
               </Button>
 
@@ -182,24 +292,42 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
           ) : (
             <>
               <div className="text-center mb-6">
-                <h2 className="font-display text-xl font-semibold text-foreground">
+                <h2 className="font-display text-xl font-bold text-foreground">
                   Complete Your Profile
                 </h2>
                 <p className="text-muted-foreground text-sm mt-1">
-                  Add your email to personalize your experience
+                  Set up your account to start earning
                 </p>
               </div>
 
               <div className="space-y-4">
                 <div>
                   <Label
+                    htmlFor="displayName"
+                    className="text-sm font-semibold text-foreground mb-1.5 block"
+                  >
+                    Display Name
+                  </Label>
+                  <Input
+                    data-ocid="auth.input"
+                    id="displayName"
+                    type="text"
+                    placeholder="Your name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSaveProfile()}
+                    className="h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50"
+                  />
+                </div>
+
+                <div>
+                  <Label
                     htmlFor="email"
-                    className="text-sm font-medium text-foreground mb-1.5 block"
+                    className="text-sm font-semibold text-foreground mb-1.5 block"
                   >
                     Email Address
                   </Label>
                   <Input
-                    data-ocid="auth.input"
                     id="email"
                     type="email"
                     placeholder="you@example.com"
@@ -213,12 +341,16 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
                 <Button
                   data-ocid="auth.submit_button"
                   onClick={handleSaveProfile}
-                  disabled={saveProfile.isPending || !email.trim()}
-                  className="w-full h-12 font-semibold text-base rounded-2xl btn-glow"
+                  disabled={
+                    saveProfile.isPending ||
+                    !email.trim() ||
+                    !displayName.trim()
+                  }
+                  className="w-full h-12 font-bold text-base rounded-2xl btn-glow"
                   style={{
                     background:
-                      "linear-gradient(135deg, oklch(0.75 0.18 195), oklch(0.7 0.2 220))",
-                    color: "oklch(0.1 0.02 260)",
+                      "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                    color: "oklch(0.1 0.02 85)",
                   }}
                 >
                   {saveProfile.isPending ? (
@@ -227,7 +359,7 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
                       Saving…
                     </>
                   ) : (
-                    "Continue to TaskFlow"
+                    "Enter Dark Coin"
                   )}
                 </Button>
               </div>

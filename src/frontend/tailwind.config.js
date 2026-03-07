@@ -89,9 +89,10 @@ export default {
       },
       boxShadow: {
         xs: "0 1px 2px 0 rgba(0,0,0,0.05)",
-        card: "0 4px 24px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.04) inset",
-        glow: "0 0 24px oklch(0.75 0.18 195 / 0.35)",
-        "glow-sm": "0 0 12px oklch(0.75 0.18 195 / 0.25)",
+        card: "0 4px 24px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.03) inset",
+        glow: "0 0 24px oklch(0.82 0.18 85 / 0.4)",
+        "glow-sm": "0 0 12px oklch(0.82 0.18 85 / 0.25)",
+        "glow-lg": "0 0 48px oklch(0.82 0.18 85 / 0.5)",
       },
       keyframes: {
         "accordion-down": {
