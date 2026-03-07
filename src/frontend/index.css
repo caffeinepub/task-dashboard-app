@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 1rem;
+
+    /* Task Dashboard — Deep Midnight Theme */
+    /* Background: deep charcoal navy */
+    --background: 0.13 0.02 260;
+    --foreground: 0.95 0.01 260;
+
+    /* Card: slightly lighter with glass effect */
+    --card: 0.17 0.025 265;
+    --card-foreground: 0.95 0.01 260;
+
+    --popover: 0.19 0.025 265;
+    --popover-foreground: 0.95 0.01 260;
+
+    /* Primary: electric teal/cyan */
+    --primary: 0.75 0.18 195;
+    --primary-foreground: 0.1 0.02 260;
+
+    /* Secondary: muted indigo */
+    --secondary: 0.22 0.04 265;
+    --secondary-foreground: 0.85 0.01 260;
+
+    /* Muted */
+    --muted: 0.2 0.03 265;
+    --muted-foreground: 0.6 0.04 265;
+
+    /* Accent: soft violet glow */
+    --accent: 0.25 0.06 280;
+    --accent-foreground: 0.92 0.02 260;
+
+    /* Destructive: vivid coral red */
+    --destructive: 0.6 0.22 25;
+    --destructive-foreground: 0.98 0 0;
+
+    /* Success: electric green */
+    --success: 0.72 0.18 155;
+    --success-foreground: 0.1 0.02 155;
+
+    /* Warning: amber */
+    --warning: 0.82 0.18 80;
+    --warning-foreground: 0.1 0.02 80;
+
+    --border: 0.28 0.04 265;
+    --input: 0.22 0.035 265;
+    --ring: 0.75 0.18 195;
+
+    --chart-1: 0.75 0.18 195;
+    --chart-2: 0.72 0.18 155;
+    --chart-3: 0.82 0.18 80;
+    --chart-4: 0.6 0.22 25;
+    --chart-5: 0.7 0.2 300;
+
+    --sidebar: 0.15 0.025 265;
+    --sidebar-foreground: 0.95 0.01 260;
+    --sidebar-primary: 0.75 0.18 195;
+    --sidebar-primary-foreground: 0.1 0.02 260;
+    --sidebar-accent: 0.22 0.04 265;
+    --sidebar-accent-foreground: 0.85 0.01 260;
+    --sidebar-border: 0.28 0.04 265;
+    --sidebar-ring: 0.75 0.18 195;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer components {
+  /* Glassmorphic card surface */
+  .glass-card {
+    background: oklch(var(--card) / 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid oklch(var(--border) / 0.6);
+    box-shadow:
+      0 4px 24px oklch(0 0 0 / 0.4),
+      0 1px 0 oklch(var(--primary) / 0.08) inset;
+  }
+
+  /* Teal glow button */
+  .btn-glow {
+    box-shadow: 0 0 20px oklch(var(--primary) / 0.35);
+  }
+
+  .btn-glow:hover {
+    box-shadow: 0 0 30px oklch(var(--primary) / 0.5);
+  }
+
+  /* Status badge variants */
+  .status-pending {
+    background: oklch(var(--warning) / 0.15);
+    color: oklch(var(--warning));
+    border: 1px solid oklch(var(--warning) / 0.3);
+  }
+
+  .status-approved {
+    background: oklch(var(--success) / 0.15);
+    color: oklch(var(--success));
+    border: 1px solid oklch(var(--success) / 0.3);
+  }
+
+  .status-declined {
+    background: oklch(var(--destructive) / 0.15);
+    color: oklch(var(--destructive));
+    border: 1px solid oklch(var(--destructive) / 0.3);
+  }
+
+  /* Bottom nav bar */
+  .bottom-nav {
+    background: oklch(var(--card) / 0.92);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid oklch(var(--border) / 0.5);
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(var(--border));
+    border-radius: 99px;
+  }
+
+  /* Shimmer animation for skeletons */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      oklch(var(--muted) / 0.8) 25%,
+      oklch(var(--accent) / 0.3) 50%,
+      oklch(var(--muted) / 0.8) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Page transition */
+  @keyframes fadeSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .page-enter {
+    animation: fadeSlideUp 0.3s ease-out forwards;
+  }
+
+  /* Teal accent glow ring for active nav */
+  .nav-active {
+    color: oklch(var(--primary));
+  }
+
+  .nav-active-indicator {
+    background: oklch(var(--primary));
+    box-shadow: 0 0 8px oklch(var(--primary) / 0.6);
+  }
+}

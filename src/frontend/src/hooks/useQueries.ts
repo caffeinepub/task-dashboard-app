@@ -1,0 +1,219 @@
+import type { Principal } from "@icp-sdk/core/principal";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { TaskStatus, UserProfile } from "../backend.d";
+import { useActor } from "./useActor";
+
+// ─── Auth / Profile ────────────────────────────────────────────────────────
+
+export function useCallerProfile() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["callerProfile"],
+    queryFn: async () => {
+      if (!actor) return null;
+      return actor.getCallerUserProfile();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useIsAdmin() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["isAdmin"],
+    queryFn: async () => {
+      if (!actor) return false;
+      return actor.isCallerAdmin();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useSaveProfile() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (profile: UserProfile) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.saveCallerUserProfile(profile);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["callerProfile"] });
+    },
+  });
+}
+
+// ─── Tasks ─────────────────────────────────────────────────────────────────
+
+export function useTasks() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["tasks"],
+    queryFn: async () => {
+      if (!actor) return [];
+      const tasks = await actor.getTasks();
+      return [...tasks].sort((a, b) => Number(a.id - b.id));
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useSubmitTask() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      file,
+    }: { taskId: bigint; file: Uint8Array }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.submitTask(taskId, file);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["userSubmissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+    },
+  });
+}
+
+export function useUpdateTask() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      title,
+      image,
+    }: {
+      taskId: bigint;
+      title: string;
+      image: Uint8Array | null;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.updateTask(taskId, title, image);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+}
+
+// ─── Submissions ───────────────────────────────────────────────────────────
+
+export function useUserSubmissions(userId: Principal | undefined) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["userSubmissions", userId?.toString()],
+    queryFn: async () => {
+      if (!actor || !userId) return [];
+      return actor.getUserSubmissions(userId);
+    },
+    enabled: !!actor && !isFetching && !!userId,
+  });
+}
+
+export function useAllSubmissions() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["allSubmissions"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getAllSubmissions();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useReviewSubmission() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      submissionId,
+      approve,
+    }: {
+      submissionId: bigint;
+      approve: boolean;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.reviewSubmission(submissionId, approve);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["userSubmissions"] });
+    },
+  });
+}
+
+// ─── Users ─────────────────────────────────────────────────────────────────
+
+export function useGetUserProfile(userId: Principal | undefined) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["userProfile", userId?.toString()],
+    queryFn: async () => {
+      if (!actor || !userId) return null;
+      return actor.getUserProfile(userId);
+    },
+    enabled: !!actor && !isFetching && !!userId,
+  });
+}
+
+export function useBlockUser() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.blockUser(userId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+    },
+  });
+}
+
+export function useUnblockUser() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.unblockUser(userId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+    },
+  });
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/** Convert a Uint8Array image to an object URL (remember to revoke). */
+export function toObjectUrl(data: Uint8Array | undefined): string | null {
+  if (!data || data.length === 0) return null;
+  return URL.createObjectURL(new Blob([data.buffer as ArrayBuffer]));
+}
+
+/** Get color class based on task status */
+export function getStatusClass(status: TaskStatus | string): string {
+  switch (status) {
+    case "approved":
+      return "status-approved";
+    case "declined":
+      return "status-declined";
+    default:
+      return "status-pending";
+  }
+}
+
+export function getStatusLabel(status: TaskStatus | string): string {
+  switch (status) {
+    case "approved":
+      return "Approved";
+    case "declined":
+      return "Declined";
+    default:
+      return "Pending";
+  }
+}
