@@ -1,7 +1,7 @@
-import { Home, ShieldAlert, User } from "lucide-react";
+import { Home, User } from "lucide-react";
 import { motion } from "motion/react";
 
-export type NavTab = "home" | "profile" | "admin";
+export type NavTab = "home" | "profile";
 
 interface BottomNavProps {
   activeTab: NavTab;
@@ -12,7 +12,6 @@ interface BottomNavProps {
 const tabs = [
   { id: "home" as NavTab, label: "Home", Icon: Home },
   { id: "profile" as NavTab, label: "Profile", Icon: User },
-  { id: "admin" as NavTab, label: "Admin", Icon: ShieldAlert },
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -30,13 +29,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
             <button
               key={id}
               type="button"
-              data-ocid={
-                id === "home"
-                  ? "nav.home_link"
-                  : id === "profile"
-                    ? "nav.profile_link"
-                    : "nav.admin_link"
-              }
+              data-ocid={id === "home" ? "nav.home_link" : "nav.profile_link"}
               onClick={() => onTabChange(id)}
               className={`flex-1 flex flex-col items-center justify-center gap-1 relative transition-colors duration-200 ${
                 isActive

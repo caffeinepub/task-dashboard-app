@@ -15,6 +15,11 @@ import {
 import { HomePage } from "./pages/HomePage";
 import { ProfilePage } from "./pages/ProfilePage";
 
+// Detect if the current URL path is /admin
+const isAdminRoute =
+  window.location.pathname === "/admin" ||
+  window.location.pathname.startsWith("/admin/");
+
 // ── Splash Screen Component ───────────────────────────────────────────────────
 
 function SplashScreen() {
@@ -137,7 +142,6 @@ export default function App() {
   const { actor } = useActor();
 
   const [activeTab, setActiveTab] = useState<NavTab>("home");
-  const [showAdmin, setShowAdmin] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
 
   // Track whether the user was previously unauthenticated (for detecting fresh login)
@@ -152,8 +156,9 @@ export default function App() {
   }, [isAuthenticated, actor, recordLastLoginMutate]);
 
   // When user transitions from unauthenticated → authenticated + has profile → show splash
+  // Skip splash when on admin route
   useEffect(() => {
-    if (!prevAuthRef.current && isAuthenticated && profile) {
+    if (!isAdminRoute && !prevAuthRef.current && isAuthenticated && profile) {
       setShowSplash(true);
       const timer = setTimeout(() => setShowSplash(false), 3500);
       prevAuthRef.current = true;
@@ -164,25 +169,13 @@ export default function App() {
     }
   }, [isAuthenticated, profile]);
 
-  // Route to admin when admin tab selected
-  useEffect(() => {
-    if (activeTab === "admin") {
-      setShowAdmin(true);
-    }
-  }, [activeTab]);
-
   const handleTabChange = (tab: NavTab) => {
-    if (tab === "admin") {
-      setShowAdmin(true);
-    } else {
-      setShowAdmin(false);
-      setActiveTab(tab);
-    }
+    setActiveTab(tab);
   };
 
   const handleBackFromAdmin = () => {
-    setShowAdmin(false);
-    setActiveTab("home");
+    // Navigate back to home when leaving admin
+    window.location.href = "/";
   };
 
   // ── Loading state while initializing auth ─────────────────────────────────
@@ -276,6 +269,25 @@ export default function App() {
 
   const principal = identity?.getPrincipal();
 
+  // ── Admin route — render admin panel directly, no bottom nav ─────────────
+  if (isAdminRoute) {
+    return (
+      <>
+        <AdminAuthGate onBack={handleBackFromAdmin} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: "oklch(0.14 0.015 265)",
+              border: "1px solid oklch(0.24 0.03 265 / 0.6)",
+              color: "oklch(0.96 0.008 80)",
+            },
+          }}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       {/* Splash screen overlay (post-login) */}
@@ -283,19 +295,9 @@ export default function App() {
 
       <div className="min-h-screen bg-background">
         {/* Max-width container for main screens */}
-        <div className={showAdmin ? "w-full" : "max-w-lg mx-auto"}>
+        <div className="max-w-lg mx-auto">
           <AnimatePresence mode="wait">
-            {showAdmin ? (
-              <motion.div
-                key="admin"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-              >
-                <AdminAuthGate onBack={handleBackFromAdmin} />
-              </motion.div>
-            ) : activeTab === "home" ? (
+            {activeTab === "home" ? (
               <motion.div
                 key="home"
                 initial={{ opacity: 0 }}
@@ -328,14 +330,12 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        {/* Bottom Navigation — only when not in admin view */}
-        {!showAdmin && (
-          <BottomNav
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-            isAdmin={isAdmin ?? false}
-          />
-        )}
+        {/* Bottom Navigation */}
+        <BottomNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          isAdmin={isAdmin ?? false}
+        />
       </div>
 
       <Toaster
