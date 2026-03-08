@@ -191,6 +191,7 @@ export function useBlockUser() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["allUsersAnalytics"] });
     },
   });
 }
@@ -205,11 +206,39 @@ export function useUnblockUser() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["allUsersAnalytics"] });
     },
   });
 }
 
 // ─── Payments ──────────────────────────────────────────────────────────────
+
+export function useUserPayments(userId: Principal | undefined) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["userPayments", userId?.toString()],
+    queryFn: async () => {
+      if (!actor || !userId) return [];
+      return actor.getUserPayments(userId);
+    },
+    enabled: !!actor && !isFetching && !!userId,
+  });
+}
+
+export function useRequestPayment() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (amount: bigint) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.requestPayment(amount);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["userPayments"] });
+      void queryClient.invalidateQueries({ queryKey: ["allPayments"] });
+    },
+  });
+}
 
 export function useAllPayments() {
   const { actor, isFetching } = useActor();

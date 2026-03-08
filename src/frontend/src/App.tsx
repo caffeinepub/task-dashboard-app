@@ -147,13 +147,14 @@ export default function App() {
   // Track whether the user was previously unauthenticated (for detecting fresh login)
   const prevAuthRef = useRef(false);
 
-  // Register user in backend when authenticated — ensures access control is set up
+  // Record last login only after the user has a profile (i.e., they're already registered).
+  // Calling this before saveCallerUserProfile causes a permission error for new users.
   const recordLastLoginMutate = recordLastLogin.mutate;
   useEffect(() => {
-    if (isAuthenticated && actor) {
+    if (isAuthenticated && actor && profile) {
       recordLastLoginMutate();
     }
-  }, [isAuthenticated, actor, recordLastLoginMutate]);
+  }, [isAuthenticated, actor, profile, recordLastLoginMutate]);
 
   // When user transitions from unauthenticated → authenticated + has profile → show splash
   // Skip splash when on admin route

@@ -29,7 +29,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { UserProfile } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useUserSubmissions } from "../hooks/useQueries";
+import {
+  useRequestPayment,
+  useUserPayments,
+  useUserSubmissions,
+} from "../hooks/useQueries";
 
 interface ProfilePageProps {
   profile: UserProfile | null;
@@ -46,11 +50,12 @@ export function ProfilePage({
 }: ProfilePageProps) {
   const { clear } = useInternetIdentity();
   const { data: submissions } = useUserSubmissions(principal);
+  const { data: userPayments } = useUserPayments(principal);
+  const requestPayment = useRequestPayment();
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
-  const [withdrawPending, setWithdrawPending] = useState(false);
 
   const submissionStats = {
     total: submissions?.length ?? 0,
@@ -81,14 +86,17 @@ export function ProfilePage({
       toast.error("Please enter a wallet address");
       return;
     }
-    setWithdrawPending(true);
-    // Simulate API call — backend withdrawal not yet implemented
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setWithdrawPending(false);
-    toast.success("Withdrawal request submitted! Pending admin review.");
-    setWithdrawOpen(false);
-    setWithdrawAmount("");
-    setWalletAddress("");
+    try {
+      await requestPayment.mutateAsync(
+        BigInt(Math.round(Number(withdrawAmount))),
+      );
+      toast.success("Withdrawal request submitted! Pending admin review.");
+      setWithdrawOpen(false);
+      setWithdrawAmount("");
+      setWalletAddress("");
+    } catch {
+      toast.error("Failed to submit withdrawal request. Please try again.");
+    }
   };
 
   return (
@@ -367,7 +375,7 @@ export function ProfilePage({
                     <Button
                       data-ocid="profile.withdrawal.submit_button"
                       onClick={handleWithdrawSubmit}
-                      disabled={withdrawPending}
+                      disabled={requestPayment.isPending}
                       className="rounded-xl btn-glow"
                       style={{
                         background:
@@ -375,7 +383,7 @@ export function ProfilePage({
                         color: "oklch(0.1 0.02 85)",
                       }}
                     >
-                      {withdrawPending ? (
+                      {requestPayment.isPending ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           Submitting…
@@ -389,22 +397,106 @@ export function ProfilePage({
               </Dialog>
             </div>
 
-            {/* Withdrawal history placeholder */}
-            <div
-              data-ocid="profile.withdrawal.empty_state"
-              className="py-6 text-center"
-            >
-              <Coins
-                className="w-8 h-8 mx-auto mb-2 opacity-25"
-                style={{ color: "oklch(0.82 0.18 85)" }}
-              />
-              <p className="text-muted-foreground text-xs">
-                No withdrawal requests yet
-              </p>
-              <p className="text-muted-foreground text-[10px] mt-0.5">
-                Complete approved tasks to request payouts
-              </p>
-            </div>
+            {/* Withdrawal history */}
+            {userPayments && userPayments.length > 0 ? (
+              <div className="space-y-2 mt-1">
+                {[...userPayments]
+                  .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+                  .map((payment, idx) => {
+                    const statusStr = String(payment.status);
+                    const statusConfig = {
+                      pending: {
+                        label: "Pending",
+                        color: "oklch(0.82 0.18 85)",
+                        bg: "oklch(0.82 0.18 85 / 0.12)",
+                        Icon: Clock,
+                      },
+                      accepted: {
+                        label: "Accepted",
+                        color: "oklch(0.72 0.18 155)",
+                        bg: "oklch(0.72 0.18 155 / 0.12)",
+                        Icon: CheckCircle,
+                      },
+                      declined: {
+                        label: "Declined",
+                        color: "oklch(var(--destructive))",
+                        bg: "oklch(var(--destructive) / 0.12)",
+                        Icon: XCircle,
+                      },
+                    };
+                    const cfg =
+                      statusConfig[statusStr as keyof typeof statusConfig] ??
+                      statusConfig.pending;
+                    const dateStr = new Date(
+                      Number(payment.createdAt) / 1_000_000,
+                    ).toLocaleDateString();
+                    return (
+                      <div
+                        key={String(payment.id)}
+                        data-ocid={`profile.withdrawal.item.${idx + 1}`}
+                        className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl"
+                        style={{
+                          background: "oklch(0.12 0.015 265 / 0.6)",
+                          border: "1px solid oklch(0.82 0.18 85 / 0.08)",
+                        }}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ background: cfg.bg }}
+                          >
+                            <cfg.Icon
+                              className="w-3.5 h-3.5"
+                              style={{ color: cfg.color }}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <p
+                              className="text-sm font-bold tabular-nums"
+                              style={{ color: "oklch(0.82 0.18 85)" }}
+                            >
+                              {Number(payment.amount).toLocaleString()}{" "}
+                              <span
+                                className="text-xs font-normal"
+                                style={{
+                                  color: "oklch(0.82 0.18 85 / 0.6)",
+                                }}
+                              >
+                                DC
+                              </span>
+                            </p>
+                            <p className="text-muted-foreground text-[10px]">
+                              {dateStr}
+                            </p>
+                          </div>
+                        </div>
+                        <span
+                          className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: cfg.bg, color: cfg.color }}
+                        >
+                          {cfg.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div
+                data-ocid="profile.withdrawal.empty_state"
+                className="py-6 text-center"
+              >
+                <Coins
+                  className="w-8 h-8 mx-auto mb-2 opacity-25"
+                  style={{ color: "oklch(0.82 0.18 85)" }}
+                />
+                <p className="text-muted-foreground text-xs">
+                  No withdrawal requests yet
+                </p>
+                <p className="text-muted-foreground text-[10px] mt-0.5">
+                  Complete approved tasks to request payouts
+                </p>
+              </div>
+            )}
           </div>
         </motion.div>
 
