@@ -5,10 +5,10 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { Progress } from "@/components/ui/progress";
 import {
   Camera,
   CheckCircle2,
+  Eye,
   Lock,
   RefreshCw,
   ShieldCheck,
@@ -20,14 +20,7 @@ import { AdminPage } from "../../pages/AdminPage";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ADMIN_PIN = "09186114";
-const FACE_SCAN_DURATION = 4000; // ms
-
-const SCAN_MESSAGES = [
-  "Initializing camera...",
-  "Scanning face...",
-  "Analyzing biometrics...",
-  "Verifying human identity...",
-];
+const REQUIRED_BLINKS = 4;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -283,42 +276,30 @@ function PinScreen({
   );
 }
 
-// ─── Face Verification Screen ─────────────────────────────────────────────────
+// ─── Face Verification Screen (Blink Detection) ───────────────────────────────
 
 function FaceScreen({ onSuccess }: { onSuccess: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [messageIndex, setMessageIndex] = useState(0);
+  const rafRef = useRef<number | null>(null);
   const [cameraError, setCameraError] = useState(false);
   const [verified, setVerified] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-  const messageIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
-  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [blinkCount, setBlinkCount] = useState(0);
+  const [faceDetected, setFaceDetected] = useState(false);
 
-  const startCamera = useCallback(async () => {
-    try {
-      setCameraError(false);
-      setCameraReady(false);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        setCameraReady(true);
-      }
-    } catch {
-      setCameraError(true);
-    }
-  }, []);
+  // Blink detection state refs (avoid re-render per frame)
+  const eyesClosedRef = useRef(false);
+  const blinkCountRef = useRef(0);
+  const verifiedRef = useRef(false);
+  const lastBrightnessRef = useRef<number[]>([]);
 
   const stopCamera = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     if (streamRef.current) {
       for (const track of streamRef.current.getTracks()) {
         track.stop();
@@ -327,52 +308,167 @@ function FaceScreen({ onSuccess }: { onSuccess: () => void }) {
     }
   }, []);
 
-  const startScan = useCallback(() => {
-    // Animate progress over 4 seconds
-    const stepMs = 40;
-    const totalSteps = FACE_SCAN_DURATION / stepMs;
-    let currentStep = 0;
-
-    progressIntervalRef.current = setInterval(() => {
-      currentStep++;
-      const pct = Math.min((currentStep / totalSteps) * 100, 100);
-      setProgress(pct);
-      if (currentStep >= totalSteps) {
-        clearInterval(progressIntervalRef.current!);
+  // Sample average brightness of a pixel region in canvas
+  const sampleBrightness = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+    ): number => {
+      try {
+        const data = ctx.getImageData(x, y, w, h).data;
+        let total = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          // Luminance = 0.299R + 0.587G + 0.114B
+          total += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        }
+        return total / (data.length / 4);
+      } catch {
+        return 128;
       }
-    }, stepMs);
+    },
+    [],
+  );
 
-    // Cycle status messages every ~1s
-    messageIntervalRef.current = setInterval(() => {
-      setMessageIndex((prev) => Math.min(prev + 1, SCAN_MESSAGES.length - 1));
-    }, FACE_SCAN_DURATION / SCAN_MESSAGES.length);
+  const detectBlinks = useCallback(() => {
+    if (verifiedRef.current) return;
 
-    // Complete after 4 seconds
-    successTimeoutRef.current = setTimeout(() => {
-      clearInterval(messageIntervalRef.current!);
-      stopCamera();
-      setVerified(true);
-      setTimeout(onSuccess, 1200);
-    }, FACE_SCAN_DURATION);
-  }, [onSuccess, stopCamera]);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) {
+      rafRef.current = requestAnimationFrame(detectBlinks);
+      return;
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      rafRef.current = requestAnimationFrame(detectBlinks);
+      return;
+    }
+
+    const W = 160;
+    const H = 120;
+    canvas.width = W;
+    canvas.height = H;
+
+    // Draw current video frame (mirrored to match display)
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -W, 0, W, H);
+    ctx.restore();
+
+    // Face region: centre 40% width, 30–80% height
+    const faceX = Math.round(W * 0.3);
+    const faceY = Math.round(H * 0.15);
+    const faceW = Math.round(W * 0.4);
+    const faceH = Math.round(H * 0.6);
+    const faceBrightness = sampleBrightness(ctx, faceX, faceY, faceW, faceH);
+
+    // Detect if a face-like region is present (brighter than background threshold)
+    const backgroundBrightness = sampleBrightness(ctx, 0, 0, W, 10);
+    const hasFace =
+      Math.abs(faceBrightness - backgroundBrightness) > 8 ||
+      faceBrightness > 60;
+    setFaceDetected(hasFace);
+
+    // Eye regions (approximate): at ~35–42% from top, 25–45% and 55–75% from left
+    const eyeY = Math.round(H * 0.32);
+    const eyeH = 10;
+    const leftEyeX = Math.round(W * 0.28);
+    const rightEyeX = Math.round(W * 0.55);
+    const eyeW = Math.round(W * 0.18);
+
+    const leftEyeBrightness = sampleBrightness(ctx, leftEyeX, eyeY, eyeW, eyeH);
+    const rightEyeBrightness = sampleBrightness(
+      ctx,
+      rightEyeX,
+      eyeY,
+      eyeW,
+      eyeH,
+    );
+    const avgEyeBrightness = (leftEyeBrightness + rightEyeBrightness) / 2;
+
+    // Keep a rolling history of brightness values (last 6 frames)
+    lastBrightnessRef.current.push(avgEyeBrightness);
+    if (lastBrightnessRef.current.length > 6) {
+      lastBrightnessRef.current.shift();
+    }
+
+    if (lastBrightnessRef.current.length >= 4) {
+      const recent = lastBrightnessRef.current;
+      const maxRecent = Math.max(...recent.slice(0, 3));
+      const minRecent = Math.min(...recent.slice(-3));
+
+      // Detect eye closure: brightness drops by >30% from recent max
+      const eyesClosed = maxRecent > 20 && minRecent < maxRecent * 0.7;
+
+      if (eyesClosed && !eyesClosedRef.current) {
+        // Eyes just closed
+        eyesClosedRef.current = true;
+      } else if (!eyesClosed && eyesClosedRef.current) {
+        // Eyes just opened (blink completed)
+        eyesClosedRef.current = false;
+        blinkCountRef.current += 1;
+        setBlinkCount(blinkCountRef.current);
+
+        if (blinkCountRef.current >= REQUIRED_BLINKS) {
+          verifiedRef.current = true;
+          stopCamera();
+          setVerified(true);
+          setTimeout(onSuccess, 1200);
+          return;
+        }
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(detectBlinks);
+  }, [sampleBrightness, stopCamera, onSuccess]);
+
+  const startCamera = useCallback(async () => {
+    try {
+      setCameraError(false);
+      setCameraReady(false);
+      setBlinkCount(0);
+      blinkCountRef.current = 0;
+      eyesClosedRef.current = false;
+      verifiedRef.current = false;
+      lastBrightnessRef.current = [];
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: 320, height: 240 },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          setCameraReady(true);
+        };
+      }
+    } catch {
+      setCameraError(true);
+    }
+  }, []);
 
   useEffect(() => {
     startCamera();
     return () => {
       stopCamera();
-      if (progressIntervalRef.current)
-        clearInterval(progressIntervalRef.current);
-      if (messageIntervalRef.current) clearInterval(messageIntervalRef.current);
-      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
     };
   }, [startCamera, stopCamera]);
 
+  // Start blink detection loop once camera is ready
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once when camera becomes ready
   useEffect(() => {
     if (cameraReady && !cameraError) {
-      startScan();
+      // Small delay to let video stabilize
+      const t = setTimeout(() => {
+        rafRef.current = requestAnimationFrame(detectBlinks);
+      }, 500);
+      return () => clearTimeout(t);
     }
-  }, [cameraReady]);
+  }, [cameraReady, detectBlinks]);
 
   return (
     <motion.div
@@ -403,6 +499,9 @@ function FaceScreen({ onSuccess }: { onSuccess: () => void }) {
         }}
       />
 
+      {/* Hidden canvas for pixel analysis */}
+      <canvas ref={canvasRef} className="sr-only" />
+
       <div className="relative z-10 flex flex-col items-center gap-7 w-full max-w-xs">
         {/* Header */}
         <motion.div
@@ -432,7 +531,7 @@ function FaceScreen({ onSuccess }: { onSuccess: () => void }) {
             Face Verification
           </h1>
           <p className="text-sm" style={{ color: "oklch(0.55 0.03 260)" }}>
-            Biometric identity check
+            Blink 4 times to verify
           </p>
         </motion.div>
 
@@ -534,13 +633,14 @@ function FaceScreen({ onSuccess }: { onSuccess: () => void }) {
                   }}
                 />
 
-                {/* Scanning ring overlay */}
+                {/* Face-focus outline — green if face detected, amber otherwise */}
                 <div
-                  className="absolute inset-0 rounded-3xl"
+                  className="absolute inset-0 rounded-3xl transition-all duration-300"
                   style={{
-                    border: "2px solid oklch(0.82 0.18 85 / 0.7)",
-                    boxShadow:
-                      "0 0 20px oklch(0.82 0.18 85 / 0.4), inset 0 0 20px oklch(0.82 0.18 85 / 0.1)",
+                    border: `2px solid ${faceDetected ? "oklch(0.72 0.18 155 / 0.8)" : "oklch(0.82 0.18 85 / 0.6)"}`,
+                    boxShadow: faceDetected
+                      ? "0 0 20px oklch(0.72 0.18 155 / 0.3), inset 0 0 20px oklch(0.72 0.18 155 / 0.05)"
+                      : "0 0 20px oklch(0.82 0.18 85 / 0.3), inset 0 0 20px oklch(0.82 0.18 85 / 0.05)",
                     animation: "scanRingPulse 2s ease-in-out infinite",
                   }}
                 />
@@ -557,27 +657,39 @@ function FaceScreen({ onSuccess }: { onSuccess: () => void }) {
                   <div
                     key={cls}
                     className={`absolute w-6 h-6 rounded-sm ${cls}`}
-                    style={{ borderColor: "oklch(0.82 0.18 85)" }}
+                    style={{
+                      borderColor: faceDetected
+                        ? "oklch(0.72 0.18 155)"
+                        : "oklch(0.82 0.18 85)",
+                    }}
                   />
                 ))}
 
-                {/* Horizontal scan line */}
+                {/* Eye focus indicator lines */}
                 <div
-                  className="absolute left-0 right-0 h-[1px]"
+                  className="absolute pointer-events-none"
                   style={{
-                    background:
-                      "linear-gradient(to right, transparent, oklch(0.82 0.18 85 / 0.8), transparent)",
-                    animation: "scanLine 2s linear infinite",
+                    top: "35%",
+                    left: "25%",
+                    width: "20%",
+                    height: "2px",
+                    background: faceDetected
+                      ? "oklch(0.72 0.18 155 / 0.7)"
+                      : "oklch(0.82 0.18 85 / 0.5)",
+                    borderRadius: "1px",
                   }}
                 />
-
-                {/* Dot grid overlay */}
                 <div
-                  className="absolute inset-0 opacity-20"
+                  className="absolute pointer-events-none"
                   style={{
-                    backgroundImage:
-                      "radial-gradient(circle, oklch(0.82 0.18 85) 1px, transparent 1px)",
-                    backgroundSize: "24px 24px",
+                    top: "35%",
+                    right: "25%",
+                    width: "20%",
+                    height: "2px",
+                    background: faceDetected
+                      ? "oklch(0.72 0.18 155 / 0.7)"
+                      : "oklch(0.82 0.18 85 / 0.5)",
+                    borderRadius: "1px",
                   }}
                 />
 
@@ -599,59 +711,116 @@ function FaceScreen({ onSuccess }: { onSuccess: () => void }) {
           )}
         </AnimatePresence>
 
-        {/* Status message */}
+        {/* Face focus hint */}
         {!verified && !cameraError && (
           <motion.div
-            key={messageIndex}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.3 }}
-            className="text-center"
+            className="flex items-center gap-2"
           >
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{
+                background: faceDetected
+                  ? "oklch(0.72 0.18 155)"
+                  : "oklch(0.82 0.18 85 / 0.5)",
+                boxShadow: faceDetected
+                  ? "0 0 6px oklch(0.72 0.18 155)"
+                  : "none",
+              }}
+            />
             <p
               className="text-sm font-medium"
-              style={{ color: "oklch(0.82 0.18 85 / 0.9)" }}
+              style={{
+                color: faceDetected
+                  ? "oklch(0.72 0.18 155)"
+                  : "oklch(0.82 0.18 85 / 0.7)",
+              }}
             >
-              {SCAN_MESSAGES[messageIndex]}
+              {faceDetected
+                ? "Face focused — blink slowly"
+                : "Focus your face in the frame"}
             </p>
           </motion.div>
         )}
 
-        {/* Progress bar */}
+        {/* Blink counter — prominent display */}
         {!verified && !cameraError && (
-          <div
-            data-ocid="admin.auth.face_progress"
-            className="w-full space-y-2"
-          >
-            <div className="flex justify-between items-center">
-              <span
-                className="text-xs"
+          <div data-ocid="admin.auth.blink_counter" className="w-full">
+            <div
+              className="flex flex-col items-center gap-3 p-4 rounded-3xl"
+              style={{
+                background: "oklch(0.13 0.018 265 / 0.9)",
+                border: "1px solid oklch(0.82 0.18 85 / 0.15)",
+              }}
+            >
+              {/* Blink count display */}
+              <div className="flex items-center gap-3">
+                <Eye
+                  className="w-5 h-5"
+                  style={{ color: "oklch(0.82 0.18 85)" }}
+                />
+                <motion.span
+                  key={blinkCount}
+                  initial={{ scale: 1.4, opacity: 0.6 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="font-display font-bold text-3xl tabular-nums"
+                  style={{ color: "oklch(0.82 0.18 85)" }}
+                >
+                  {blinkCount}
+                </motion.span>
+                <span
+                  className="font-bold text-lg"
+                  style={{ color: "oklch(0.4 0.03 260)" }}
+                >
+                  / {REQUIRED_BLINKS}
+                </span>
+              </div>
+
+              <p
+                className="text-xs font-medium"
                 style={{ color: "oklch(0.55 0.03 260)" }}
               >
-                Biometric scan
-              </span>
-              <span
-                className="text-xs font-mono"
-                style={{ color: "oklch(0.82 0.18 85)" }}
-              >
-                {Math.round(progress)}%
-              </span>
-            </div>
-            <div
-              className="w-full h-2 rounded-full overflow-hidden"
-              style={{ background: "oklch(0.19 0.025 265)" }}
-            >
-              <motion.div
-                className="h-full rounded-full"
-                style={{
-                  width: `${progress}%`,
-                  background:
-                    "linear-gradient(90deg, oklch(0.82 0.18 85), oklch(0.92 0.1 90))",
-                  boxShadow: "0 0 10px oklch(0.82 0.18 85 / 0.5)",
-                }}
-                transition={{ ease: "linear" }}
-              />
+                Blinks detected
+              </p>
+
+              {/* Blink progress dots */}
+              <div className="flex items-center gap-2">
+                {Array.from(
+                  { length: REQUIRED_BLINKS },
+                  (_, i) => `blink-dot-${i}`,
+                ).map((dotKey, i) => (
+                  <motion.div
+                    key={dotKey}
+                    animate={
+                      i < blinkCount
+                        ? {
+                            scale: [1, 1.3, 1],
+                            background: [
+                              "oklch(0.82 0.18 85 / 0.3)",
+                              "oklch(0.82 0.18 85)",
+                              "oklch(0.82 0.18 85)",
+                            ],
+                          }
+                        : {}
+                    }
+                    transition={{ duration: 0.3 }}
+                    className="w-4 h-4 rounded-full"
+                    style={{
+                      background:
+                        i < blinkCount
+                          ? "oklch(0.82 0.18 85)"
+                          : "oklch(0.22 0.025 265)",
+                      border: `1.5px solid ${i < blinkCount ? "oklch(0.82 0.18 85)" : "oklch(0.35 0.03 265)"}`,
+                      boxShadow:
+                        i < blinkCount
+                          ? "0 0 8px oklch(0.82 0.18 85 / 0.5)"
+                          : "none",
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         )}

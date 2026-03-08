@@ -460,7 +460,10 @@ function ExpandableUserCard({
   }, [userProfile]);
 
   const principalStr = entry.userId.toString();
-  const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
+  const uniqueId = (entry as { uniqueId?: string }).uniqueId;
+  const shortPrincipal = uniqueId
+    ? `ID: ${uniqueId}`
+    : `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
   const displayName = entry.email ? entry.email.split("@")[0] : shortPrincipal;
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
@@ -605,7 +608,7 @@ function ExpandableUserCard({
           </div>
           <div className="flex items-center gap-3 mt-0.5">
             <p className="text-xs font-mono text-muted-foreground truncate">
-              {shortPrincipal}
+              {uniqueId ? `ID: ${uniqueId}` : shortPrincipal}
             </p>
             <span
               className="text-xs font-semibold"
@@ -727,13 +730,16 @@ function ExpandableUserCard({
                 ))}
               </div>
 
-              {/* Full principal */}
+              {/* Unique ID */}
               <div>
                 <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wide">
-                  Principal ID
+                  Unique ID
                 </p>
-                <p className="text-xs font-mono text-foreground/60 break-all leading-relaxed">
-                  {principalStr}
+                <p
+                  className="text-base font-mono font-bold tracking-widest"
+                  style={{ color: "oklch(0.82 0.18 85)" }}
+                >
+                  {uniqueId ?? "—"}
                 </p>
               </div>
 
@@ -1911,7 +1917,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   data-ocid="admin.users.search_input"
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Search by email or principal ID..."
+                  placeholder="Search by email or unique ID..."
                   className="h-10 pl-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
                 />
               </div>
@@ -1986,9 +1992,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 const filteredUsers = analyticsData.filter((entry) => {
                   if (!userSearch.trim()) return true;
                   const q = userSearch.toLowerCase();
+                  const uid = (entry as { uniqueId?: string }).uniqueId ?? "";
                   return (
                     entry.email.toLowerCase().includes(q) ||
-                    entry.userId.toString().toLowerCase().includes(q)
+                    uid.toLowerCase().includes(q)
                   );
                 });
                 return filteredUsers.length === 0 ? (
@@ -2001,7 +2008,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       No users found
                     </p>
                     <p className="text-muted-foreground text-xs mt-1">
-                      Try searching by a different email or principal ID
+                      Try searching by a different email or unique ID
                     </p>
                   </div>
                 ) : (

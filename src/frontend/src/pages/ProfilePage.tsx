@@ -802,12 +802,6 @@ export function ProfilePage({
       submissions?.filter((s) => String(s.status) === "declined").length ?? 0,
   };
 
-  const principalStr = principal?.toString() ?? "";
-  const truncatedPrincipal =
-    principalStr.length > 20
-      ? `${principalStr.slice(0, 10)}…${principalStr.slice(-10)}`
-      : principalStr;
-
   // Derive display name from email prefix
   const displayName = profile?.email?.split("@")[0] ?? "Anonymous";
   const avatarLetter = displayName.charAt(0).toUpperCase();
@@ -905,17 +899,46 @@ export function ProfilePage({
           )}
         </motion.div>
 
-        {/* Principal */}
-        {principalStr && (
+        {/* Unique ID */}
+        {profile?.uniqueId && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="glass-card rounded-2xl p-4"
           >
-            <p className="text-xs text-muted-foreground mb-1">Principal ID</p>
-            <p className="text-sm font-mono text-foreground/80 break-all">
-              {truncatedPrincipal}
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-muted-foreground">Your Unique ID</p>
+              <button
+                type="button"
+                data-ocid="profile.unique_id.copy_button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(profile.uniqueId ?? "");
+                    toast.success("Unique ID copied");
+                  } catch {
+                    toast.error("Failed to copy");
+                  }
+                }}
+                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg transition-colors hover:opacity-80"
+                style={{
+                  background: "oklch(0.82 0.18 85 / 0.1)",
+                  color: "oklch(0.82 0.18 85)",
+                  border: "1px solid oklch(0.82 0.18 85 / 0.2)",
+                }}
+              >
+                <ClipboardCopy className="w-3 h-3" />
+                Copy
+              </button>
+            </div>
+            <p
+              className="text-2xl font-display font-bold tracking-[0.25em]"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            >
+              {profile.uniqueId}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Use this ID to contact support about your account
             </p>
           </motion.div>
         )}

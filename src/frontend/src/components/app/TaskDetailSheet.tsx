@@ -117,9 +117,28 @@ export function TaskDetailSheet({
     if (!selectedFile || !task) return;
     setSubmitError(null);
     try {
-      const buffer = await selectedFile.arrayBuffer();
-      const blob = new Uint8Array(buffer);
-      await submitTask.mutateAsync({ taskId: task.id, file: blob });
+      // Use FileReader wrapped in a Promise for maximum compatibility
+      const fileBytes = await new Promise<Uint8Array>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result;
+          if (result instanceof ArrayBuffer) {
+            resolve(new Uint8Array(result));
+          } else {
+            reject(new Error("Failed to read file as ArrayBuffer"));
+          }
+        };
+        reader.onerror = () => reject(new Error("FileReader error"));
+        reader.readAsArrayBuffer(selectedFile);
+      });
+
+      if (fileBytes.length === 0) {
+        throw new Error(
+          "File appears to be empty. Please select a valid file.",
+        );
+      }
+
+      await submitTask.mutateAsync({ taskId: task.id, file: fileBytes });
       setSubmitSuccess(true);
       toast.success("Proof submitted! Awaiting review.");
       setTimeout(() => onClose(), 1800);

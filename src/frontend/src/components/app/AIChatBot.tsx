@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Principal } from "@icp-sdk/core/principal";
 import {
   CheckCircle,
   Clock,
@@ -28,7 +27,7 @@ interface Message {
 }
 
 interface UserData {
-  principalId: string;
+  uniqueId: string;
   email?: string;
   coinBalance: bigint;
   isBlocked?: boolean;
@@ -62,12 +61,9 @@ function maskAccount(account: string): string {
   return "●".repeat(account.length - 4) + account.slice(-4);
 }
 
-function isPrincipalLike(str: string): boolean {
-  // ICP principal IDs have multiple "-" segments and are at least 20 chars
-  const cleaned = str.trim();
-  if (cleaned.length < 20) return false;
-  const segments = cleaned.split("-");
-  return segments.length >= 3;
+function isUniqueIdLike(str: string): boolean {
+  // Unique IDs are exactly 6 digits
+  return /^\d{6}$/.test(str.trim());
 }
 
 function statusLabel(status: string): string {
@@ -272,7 +268,7 @@ export function AIChatBot({ actor }: AIChatBotProps) {
   const startGreeting = async () => {
     setSessionState("awaiting_principal");
     await addBotMessage(
-      "👋 Hello! I'm Dark Coin Support.\n\nTo help you, I need to verify your identity. Please share your Principal ID below.",
+      "👋 Hello! I'm Dark Coin Support.\n\nTo help you, I need to verify your identity. Please share your **6-digit unique ID** (shown on your Profile page).",
       undefined,
       400,
     );
@@ -288,7 +284,7 @@ export function AIChatBot({ actor }: AIChatBotProps) {
     }, 100);
   };
 
-  const lookupUser = async (principalIdStr: string) => {
+  const lookupUser = async (uniqueId: string) => {
     if (!actor) {
       await addBotMessage(
         "⚠️ Connection issue. Please refresh the page and try again.",
@@ -301,35 +297,35 @@ export function AIChatBot({ actor }: AIChatBotProps) {
     setIsTyping(true);
 
     try {
-      const principalObj = Principal.fromText(principalIdStr.trim());
-      const [profile, submissionsRaw, paymentsRaw, balance, bankDetails] =
-        await Promise.all([
-          actor.getUserProfile(principalObj),
-          actor.getUserSubmissions(principalObj),
-          actor.getUserPayments(principalObj),
-          actor.getCoinBalance(principalObj),
-          actor.getBankDetails(principalObj),
-        ]);
+      const result = await actor.getUserByUniqueId(uniqueId.trim());
 
-      setIsTyping(false);
-
-      if (!profile) {
+      if (!result) {
+        setIsTyping(false);
         setSessionState("awaiting_principal");
         await addBotMessage(
-          "❌ I couldn't find an account with that Principal ID.\n\nPlease double-check and try again.",
+          "❌ I couldn't find an account with that unique ID.\n\nPlease check your 6-digit unique ID on the Profile page and try again.",
           ["Try again"],
         );
         return;
       }
 
+      const { profile, userId, analytics } = result;
+
+      const [submissionsRaw, paymentsRaw] = await Promise.all([
+        actor.getUserSubmissions(userId),
+        actor.getUserPayments(userId),
+      ]);
+
+      setIsTyping(false);
+
       const data: UserData = {
-        principalId: principalIdStr.trim(),
+        uniqueId: uniqueId.trim(),
         email: profile.email || undefined,
-        coinBalance: balance,
+        coinBalance: profile.coinBalance,
         isBlocked: profile.isBlocked,
-        bankName: bankDetails?.bankName,
-        accountNumberMasked: bankDetails
-          ? maskAccount(bankDetails.accountNumber)
+        bankName: profile.bankDetails?.bankName,
+        accountNumberMasked: profile.bankDetails
+          ? maskAccount(profile.bankDetails.accountNumber)
           : undefined,
         submissions: submissionsRaw.map((s) => ({
           taskId: String(s.taskId),
@@ -343,6 +339,9 @@ export function AIChatBot({ actor }: AIChatBotProps) {
           createdAt: p.createdAt,
         })),
       };
+
+      // Use analytics for additional info
+      void analytics;
 
       setUserData(data);
       setSessionState("awaiting_question");
@@ -361,23 +360,12 @@ export function AIChatBot({ actor }: AIChatBotProps) {
       );
     } catch (err) {
       setIsTyping(false);
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        msg.toLowerCase().includes("invalid") ||
-        msg.toLowerCase().includes("principal")
-      ) {
-        setSessionState("awaiting_principal");
-        await addBotMessage(
-          "⚠️ That doesn't look like a valid Principal ID format.\n\nPlease copy your Principal ID from the Profile page and paste it here.",
-          ["Try again"],
-        );
-      } else {
-        setSessionState("awaiting_principal");
-        await addBotMessage(
-          "⚠️ Something went wrong looking up your account. Please try again.",
-          ["Try again"],
-        );
-      }
+      setSessionState("awaiting_principal");
+      await addBotMessage(
+        "⚠️ Something went wrong looking up your account. Please check your unique ID and try again.",
+        ["Try again"],
+      );
+      console.error("lookupUser error:", err);
     }
   };
 
@@ -487,14 +475,14 @@ export function AIChatBot({ actor }: AIChatBotProps) {
       q.includes("problem")
     ) {
       await addBotMessage(
-        "📞 To contact our support team:\n\n1. Copy your Order ID from Withdrawal History\n2. Email: support@darkcoin.app\n3. Include your Principal ID and Order ID in the message\n\nWe respond within 24 hours.",
+        "📞 To contact our support team:\n\n1. Copy your Order ID from Withdrawal History\n2. Email: support@darkcoin.app\n3. Include your unique ID and Order ID in the message\n\nWe respond within 24 hours.",
         ["Check my balance", "Withdrawal status", "Ask another question"],
       );
     } else if (q.includes("try again") || q.includes("another")) {
       setSessionState("awaiting_principal");
       setUserData(null);
       await addBotMessage(
-        "Sure! Please share your Principal ID to start fresh.",
+        "Sure! Please share your 6-digit unique ID to start fresh.",
       );
       return;
     } else {
@@ -519,12 +507,12 @@ export function AIChatBot({ actor }: AIChatBotProps) {
     addUserMessage(text);
 
     if (sessionState === "awaiting_principal" || sessionState === "greet") {
-      // Validate principal-like format
-      if (isPrincipalLike(text)) {
+      // Validate unique ID format — must be exactly 6 digits
+      if (isUniqueIdLike(text)) {
         await lookupUser(text);
       } else {
         await addBotMessage(
-          "⚠️ That doesn't look like a valid Principal ID.\n\nYour Principal ID is a long string with hyphens — you can find it on the Profile page.",
+          "⚠️ That doesn't look like a valid unique ID.\n\nYour unique ID is a 6-digit number — you can find it on your Profile page.",
           ["Try again"],
         );
       }
@@ -543,7 +531,7 @@ export function AIChatBot({ actor }: AIChatBotProps) {
     if (chip === "Try again") {
       setSessionState("awaiting_principal");
       await addBotMessage(
-        "Please share your Principal ID to look up your account.",
+        "Please share your 6-digit unique ID to look up your account.",
       );
       return;
     }
@@ -725,7 +713,7 @@ export function AIChatBot({ actor }: AIChatBotProps) {
               placeholder={
                 sessionState === "awaiting_principal" ||
                 sessionState === "greet"
-                  ? "Paste your Principal ID here…"
+                  ? "Enter your 6-digit unique ID…"
                   : "Type your question…"
               }
               disabled={isTyping || sessionState === "lookup"}

@@ -763,10 +763,27 @@ export default function App() {
     }
   }, [isAuthenticated, actor, profile, recordLastLoginMutate]);
 
+  // Track whether this is a fresh login (not a page refresh with stored identity)
+  // We detect fresh login by checking loginStatus transitions
+  const isFreshLoginRef = useRef(false);
+
+  useEffect(() => {
+    if (loginStatus === "success") {
+      isFreshLoginRef.current = true;
+    }
+  }, [loginStatus]);
+
   // When user transitions from unauthenticated → authenticated + has profile → show splash
+  // Only show splash on fresh logins (not page refreshes with stored identity)
   // Skip splash when on admin route
   useEffect(() => {
-    if (!isAdminRoute && !prevAuthRef.current && isAuthenticated && profile) {
+    if (
+      !isAdminRoute &&
+      !prevAuthRef.current &&
+      isAuthenticated &&
+      profile &&
+      isFreshLoginRef.current
+    ) {
       setShowSplash(true);
       const timer = setTimeout(() => setShowSplash(false), 3500);
       prevAuthRef.current = true;

@@ -1,47 +1,70 @@
 # Dark Coin
 
 ## Current State
-Full-stack ICP app with:
-- Internet Identity auth + bank setup gate + splash screen
-- 6-task grid with glassmorphic cards, external link support, proof upload
-- Admin panel at /admin protected by PIN (09186114) + face scan gate
-- Backend: updateTask, reviewPayment, updatePaymentStatus, clearAllData, deleteUser, saveBankDetails, getAllUsersAnalytics, etc.
-- ProfilePage with withdrawal history, bank details, task stats
-- Task URL stored only in frontend TASK_CONFIG (not backend), so URL edits in admin panel have no backend counterpart
+- Internet Identity auth with profile setup, bank account setup flow (IFSC + account number)
+- 6 task grid with glassmorphic cards, proof upload, task locking after submission
+- Approved/Declined stamps on tasks
+- Admin panel at `/admin` only, protected by 8-digit PIN (09186114) + 4-second auto-timer face scan
+- Face scan uses a 4-second auto-timer after camera ready, then redirects to admin
+- 5-tab admin panel: Tasks, Proofs, Users, Payments, Activity
+- Users tab with search by email or principal ID, expandable user cards
+- Payments: 5-stage flow (Pending → Approved → In Payment → Transferred → Declined)
+- AI chatbot asks for principal ID to look up user data
+- Admin panel shows principal ID per user
+- Task 1 reward: 0 (not set)
+- Persistent login: NOT fully implemented — app re-checks identity state on load via `useInternetIdentity` hook
+- Task screenshot upload errors exist (error handling issues)
 
 ## Requested Changes (Diff)
 
 ### Add
-- AI Chat bot ("Chat with Us") button visible on home and profile pages
-  - Floating action button (bottom right, above bottom nav)
-  - Opens a chat sheet/modal
-  - Bot flow: 1) Ask for principal ID, 2) Ask what the problem is, 3) Look up that user's data (profile, submissions, payments, balance, bank details) using backend queries, 4) Answer queries using only that user's data
-  - Bot must never reveal other users' data
-  - Bot answers queries: balance, task status, withdrawal status, bank details confirmation, general support
-  - Secure: bot only uses principalId provided by user, validates it, won't accept random text
-- Winning history section on Profile page (task submissions with approved status shown as "earnings")
-- Task link (URL) saving: add `taskLink` field to backend Task type and updateTask so URLs persist in backend (not just frontend TASK_CONFIG)
+- **6-digit unique user ID**: Generate a random 6-digit ID (e.g. 847291) for each user on first login, stored permanently. Never changes. Shown in user app (profile page) and in admin panel per user row.
+- **Backend: `uniqueId` field** on `UserProfile` (nullable Text, generated on first profile creation/save)
+- **Backend: `getUserByUniqueId(uid: Text)` query** so AI bot can look up user by unique ID
+- **Eye-blink detection for admin face verification**: Replace the 4-second timer with real blink detection using MediaPipe FaceMesh or simple EAR (Eye Aspect Ratio) algorithm. Admin must blink 4 times (no time limit). Show live blink counter "Blinks: X/4" and face focus indicator. Only after 4 blinks complete, redirect to admin panel.
+- **Task 1 reward set to ₹11** (hardcoded default in backend init or set via admin)
 
 ### Modify
-- Fix "Failed to update task" error: The root cause is the `updateTask` Motoko function is called with image as `undefined` (None) which the SDK encodes correctly, BUT the real issue is that the backend `updateTask` needs the `taskLink` field too. Currently URL is only stored in frontend. Extend backend Task to include `taskLink: Text` and update `updateTask` to accept it.
-- Fix task URL field in admin: currently the URL field in AdminTaskRow only updates local state but doesn't pass startLink to `updateTask`. Wire startLink into the save call.
-- Admin panel task save: pass `startLink` as the task link to backend updateTask
-- TaskCard: read task link from backend `task.taskLink` field (falling back to TASK_CONFIG for backward compat)
-- HomePage: use backend task link when starting a task
-- ProfilePage: add "Winning History" section showing approved submissions with task name, date, reward amount earned
-- User app UI redesign: more premium fintech feel — better spacing, typography, cards with gradient borders, section headers with icons
-- Withdrawal history UI: redesign with clearer status indicators, timeline-style layout
+- **AI chatbot**: Replace "please provide your principal ID" with "please provide your 6-digit unique ID". Bot uses `getUserByUniqueId` to fetch user data.
+- **Admin panel Users tab**: Replace principal ID display with unique ID display per user. Search remains working (by email or unique ID now, not principal).
+- **Admin face verification**: Remove 4-second timer. Replace with eye-blink counter (4 blinks required). Show "Blinks: X/4" counter. No redirect until 4th blink detected.
+- **Persistent login**: Once user is logged in and has profile + bank details, do NOT show auth/profile/bank screens again on app reopen. Session persists via Internet Identity's own persistence (localStorage). On app load, skip splash/loading and go directly to home if already authenticated.
+- **Task screenshot upload**: Fix error — ensure file is properly read as Uint8Array before calling `submitTask`. Add proper error handling and retry.
+- **Task 1 reward**: Update initTasks to set task 0 (Task 1, id=0) reward to 11.
 
 ### Remove
-- Nothing removed
+- Principal ID visible display in user app and admin panel (keep internally for backend calls)
+- 4-second face scan timer (replaced by blink detection)
 
 ## Implementation Plan
-1. Update Motoko backend: add `taskLink: Text` to Task type, update `updateTask` to accept taskLink param, update `initTasks` to set empty taskLink
-2. Regenerate backend bindings (backend.d.ts will be updated via generate_motoko_code)
-3. Update useUpdateTask hook: add taskLink param to mutationFn
-4. Update AdminTaskRow: pass startLink to updateTask.mutateAsync call
-5. Update TaskCard: read task.taskLink from backend, fall back to TASK_CONFIG[index].link
-6. Update HomePage handleStartTask: use task.taskLink for external link detection
-7. Add AIChatBot component: floating button + sheet with conversation flow
-8. Update ProfilePage: add WinningHistory section (approved submissions), redesign withdrawal history with timeline style
-9. Full UI polish pass on home page, profile page layout
+1. **Backend (Motoko)**:
+   - Add `uniqueId: ?Text` field to `UserProfile`
+   - In `ensureUserRegistered` and `saveCallerUserProfile`, generate a 6-digit unique ID if not already set (use timestamp + principal hash modulo 900000 + 100000)
+   - Add `getUserByUniqueId(uid: Text): async ?{profile: UserProfile; userId: Principal}` query
+   - Update `getAllUsersAnalytics` to include `uniqueId` in response
+   - In `initTasks`, set task id=0 reward to 11
+   - Update `getCallerUserProfile` to return profile with uniqueId
+
+2. **Frontend — AdminAuthGate.tsx**:
+   - Replace `FaceScreen` timer logic with EAR-based blink detection using canvas + requestAnimationFrame
+   - Draw video frames to canvas, sample eye landmark regions for blink detection
+   - Show "Blinks: X/4" counter overlay on video
+   - Show face focus indicator (green/red outline)
+   - No redirect until blinkCount === 4
+
+3. **Frontend — AIChatBot.tsx**:
+   - Change prompt: ask for 6-digit unique ID instead of principal ID
+   - Call `getUserByUniqueId` backend function to look up user data
+
+4. **Frontend — AdminPage.tsx**:
+   - Replace principal ID display with unique ID in user rows and detail views
+   - Update search to filter by email or unique ID
+
+5. **Frontend — ProfilePage.tsx**:
+   - Show unique ID on profile page (replacing principal ID display if any)
+
+6. **Frontend — TaskDetailSheet.tsx / useSubmitTask**:
+   - Fix screenshot upload error: properly convert File to Uint8Array using FileReader
+
+7. **Frontend — App.tsx**:
+   - Ensure persistent login: once `isAuthenticated && profile && bankDetails`, do not re-show setup screens. The Internet Identity hook already persists session in localStorage, so just ensure no unnecessary profile refetching triggers re-render to setup screens.

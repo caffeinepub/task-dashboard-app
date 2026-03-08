@@ -41,6 +41,7 @@ export interface UserProfile {
     coinBalance: bigint;
     isBlocked: boolean;
     role: string;
+    uniqueId?: string;
     email: string;
 }
 export enum TaskStatus {
@@ -78,7 +79,11 @@ export interface backendInterface {
     getAllPayments(): Promise<Array<PaymentRequest>>;
     getAllSubmissions(): Promise<Array<Submission>>;
     getAllUsersAnalytics(): Promise<Array<{
+        bankDetails?: BankDetails;
+        coinBalance: bigint;
         userId: Principal;
+        isBlocked: boolean;
+        uniqueId?: string;
         tasksCompleted: bigint;
         email: string;
         totalSubmissions: bigint;
@@ -94,6 +99,15 @@ export interface backendInterface {
         totalSubmissions: bigint;
         lastLogin?: bigint;
     }>;
+    getUserByUniqueId(uid: string): Promise<{
+        userId: Principal;
+        analytics: {
+            tasksCompleted: bigint;
+            totalSubmissions: bigint;
+            lastLogin?: bigint;
+        };
+        profile: UserProfile;
+    } | null>;
     getUserPayments(userId: Principal): Promise<Array<PaymentRequest>>;
     getUserProfile(_user: Principal): Promise<UserProfile | null>;
     getUserSubmissions(userId: Principal): Promise<Array<Submission>>;

@@ -2,22 +2,22 @@ import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
-import Principal "mo:core/Principal";
-import Order "mo:core/Order";
-import Nat "mo:core/Nat";
-import Runtime "mo:core/Runtime";
-import Map "mo:core/Map";
-import Array "mo:core/Array";
 import Text "mo:core/Text";
-import Int "mo:core/Int";
+import Nat "mo:core/Nat";
+import Array "mo:core/Array";
 import Time "mo:core/Time";
+import Int "mo:core/Int";
+import Runtime "mo:core/Runtime";
+import Principal "mo:core/Principal";
+import Map "mo:core/Map";
 import Iter "mo:core/Iter";
+import Order "mo:core/Order";
+import Char "mo:core/Char";
+import Migration "migration";
 
-
-
+(with migration = Migration.run)
 actor {
   include MixinStorage();
-
   public type Blob = Storage.ExternalBlob;
 
   type TaskStatus = {
@@ -38,6 +38,23 @@ actor {
     isBlocked : Bool;
     coinBalance : Nat;
     bankDetails : ?BankDetails;
+    uniqueId : ?Text;
+  };
+
+  public type Task = {
+    id : Nat;
+    title : Text;
+    image : ?Blob;
+    reward : Nat;
+  };
+
+  public type Submission = {
+    id : Nat;
+    userId : Principal;
+    taskId : Nat;
+    file : Blob;
+    status : TaskStatus;
+    createdAt : Int;
   };
 
   public type PaymentRequest = {
@@ -50,65 +67,47 @@ actor {
     coinsDeducted : Bool;
   };
 
-  module Task {
-    public type Task = {
-      id : Nat;
-      title : Text;
-      image : ?Blob;
-      reward : Nat;
-    };
-
-    public func compare(t1 : Task, t2 : Task) : Order.Order {
-      Nat.compare(t1.id, t2.id);
-    };
-  };
-
-  module Submission {
-    public type Submission = {
-      id : Nat;
-      userId : Principal;
-      taskId : Nat;
-      file : Blob;
-      status : TaskStatus;
-      createdAt : Int;
-    };
-
-    public func compare(s1 : Submission, s2 : Submission) : Order.Order {
-      let timeOrder = Int.compare(s2.createdAt, s1.createdAt);
-      if (timeOrder != #equal) {
-        return timeOrder;
-      };
-      Nat.compare(s1.id, s2.id);
-    };
-  };
-
-  let tasks = Map.empty<Nat, Task.Task>();
-  let submissions = Map.empty<Nat, Submission.Submission>();
-  var nextSubmissionId : Nat = 0;
-  let userProfiles = Map.empty<Principal, UserProfile>();
-  let paymentRequests = Map.empty<Nat, PaymentRequest>();
-  var nextPaymentId : Nat = 0;
-
-  let userAnalytics = Map.empty<Principal, {
+  type UserAnalytics = {
     var lastLogin : ?Int;
     var tasksCompleted : Nat;
     var totalSubmissions : Nat;
-  }>();
+  };
 
+  // State
+  let tasks = Map.empty<Nat, Task>();
+  let submissions = Map.empty<Nat, Submission>();
+  let userProfiles = Map.empty<Principal, UserProfile>();
+  var nextSubmissionId : Nat = 0;
+  let paymentRequests = Map.empty<Nat, PaymentRequest>();
+  var nextPaymentId : Nat = 0;
+  let userAnalytics = Map.empty<Principal, UserAnalytics>();
+  let autoRegisteredUsers = Map.empty<Principal, Bool>();
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  let autoRegisteredUsers = Map.empty<Principal, Bool>();
+  // -- Helper Functions --
+  func generateUniqueId(caller : Principal) : Text {
+    let timestamp = Time.now();
+    let callerText = caller.toText();
 
-  private func initTasks() {
-    for (i in [0, 1, 2, 3, 4, 5].values()) {
-      tasks.add(i, { id = i; title = "Task " # i.toText(); image = null; reward = 0 });
+    var numericValue = timestamp.toText().size() + callerText.size();
+
+    for (char in callerText.chars()) {
+      let charValue = char.toNat32().toNat().toText();
+      numericValue += charValue.size();
     };
-  };
-  initTasks();
 
-  private func ensureUserRegistered(caller : Principal) {
-    if (not caller.isAnonymous() and caller.toText() != "aaaaa-aa") {
+    let modValue = numericValue % 900_000;
+    let normalizedValue = if (modValue + 100_000 > 0) {
+      modValue + 100_000;
+    } else {
+      1;
+    };
+    normalizedValue.toText();
+  };
+
+  func ensureUserRegistered(caller : Principal) {
+    if (not caller.isAnonymous()) {
       switch (userProfiles.get(caller)) {
         case (null) {
           let newProfile : UserProfile = {
@@ -117,6 +116,7 @@ actor {
             isBlocked = false;
             coinBalance = 0;
             bankDetails = null;
+            uniqueId = ?generateUniqueId(caller);
           };
           userProfiles.add(caller, newProfile);
           autoRegisteredUsers.add(caller, true);
@@ -129,12 +129,20 @@ actor {
             },
           );
         };
-        case (_) {};
+        case (?existing) {
+          switch (existing.uniqueId) {
+            case (null) {
+              let updatedProfile = { existing with uniqueId = ?generateUniqueId(caller) };
+              userProfiles.add(caller, updatedProfile);
+            };
+            case (?_) {};
+          };
+        };
       };
     };
   };
 
-  private func hasUserPermission(caller : Principal) : Bool {
+  func hasUserPermission(caller : Principal) : Bool {
     if (caller.isAnonymous()) {
       return false;
     };
@@ -145,33 +153,92 @@ actor {
     AccessControl.hasPermission(accessControlState, caller, #user);
   };
 
-  private func isUserBlocked(userId : Principal) : Bool {
+  func isUserBlocked(userId : Principal) : Bool {
     switch (userProfiles.get(userId)) {
       case (?profile) { profile.isBlocked };
       case null { false };
     };
   };
 
+  func generateOrderId() : Text {
+    let timestamp = Time.now();
+    let tsNat = if (timestamp < 0) { 0 } else { Int.abs(timestamp) };
+    let modNumber = tsNat % 1_000_000_000_000;
+    let ret = modNumber.toText();
+    let retSize = ret.size();
+    if (retSize < 12) {
+      let zerosNeeded = 12 - retSize;
+      let emptyString = "";
+      let zeros = zerosNeeded.toText();
+      emptyString # zeros # ret;
+    } else {
+      ret;
+    };
+  };
+
+  // ------ User Management ------
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Anonymous users cannot view profiles");
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view profiles");
     };
     ensureUserRegistered(caller);
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(_user : Principal) : async ?UserProfile {
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only authenticated users can view profiles");
+    if (caller != _user and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own profile");
     };
     userProfiles.get(_user);
   };
 
-  public shared ({ caller }) func saveCallerUserProfile(profile : { email : Text; role : Text; isBlocked : Bool }) : async () {
-    ensureUserRegistered(caller);
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Anonymous users cannot save profiles");
+  public query ({ caller }) func getUserByUniqueId(uid : Text) : async ?{
+    profile : UserProfile;
+    userId : Principal;
+    analytics : {
+      lastLogin : ?Int;
+      tasksCompleted : Nat;
+      totalSubmissions : Nat;
     };
+  } {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can query by uniqueId");
+    };
+
+    switch (userProfiles.entries().find(
+      func((p, profile)) {
+        profile.uniqueId == ?uid;
+      }
+    )) {
+      case (null) { null };
+      case (?first) {
+        let (userId, foundProfile) = first;
+
+        let analytics = switch (userAnalytics.get(userId)) {
+          case (?a) { a };
+          case null {
+            { var lastLogin : ?Int = null; var tasksCompleted : Nat = 0; var totalSubmissions : Nat = 0 };
+          };
+        };
+
+        ?{
+          profile = foundProfile;
+          userId;
+          analytics = {
+            lastLogin = analytics.lastLogin;
+            tasksCompleted = analytics.tasksCompleted;
+            totalSubmissions = analytics.totalSubmissions;
+          };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : { email : Text; role : Text; isBlocked : Bool }) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
+    ensureUserRegistered(caller);
     switch (userProfiles.get(caller)) {
       case (?existingProfile) {
         if (existingProfile.isBlocked) {
@@ -192,12 +259,16 @@ actor {
         case (?existing) { existing.bankDetails };
         case (null) { null };
       };
+      uniqueId = switch (userProfiles.get(caller)) {
+        case (?existing) { existing.uniqueId };
+        case (null) { null };
+      };
     };
     userProfiles.add(caller, updatedProfile);
   };
 
   public shared ({ caller }) func addCoins(userId : Principal, amount : Nat) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can add coins");
     };
     switch (userProfiles.get(userId)) {
@@ -214,7 +285,7 @@ actor {
   };
 
   public shared ({ caller }) func deductCoins(userId : Principal, amount : Nat) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can deduct coins");
     };
     switch (userProfiles.get(userId)) {
@@ -234,8 +305,8 @@ actor {
   };
 
   public query ({ caller }) func getCoinBalance(userId : Principal) : async Nat {
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only authenticated users can view coin balance");
+    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own coin balance");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) { profile.coinBalance };
@@ -244,75 +315,80 @@ actor {
   };
 
   public shared ({ caller }) func blockUser(userId : Principal) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can block users");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
-        let updated = {
-          email = profile.email;
-          role = profile.role;
-          isBlocked = true;
-          coinBalance = profile.coinBalance;
-          bankDetails = profile.bankDetails;
+        let updatedProfile : UserProfile = {
+          profile with isBlocked = true;
         };
-        userProfiles.add(userId, updated);
+        userProfiles.add(userId, updatedProfile);
       };
       case null {
-        Runtime.trap("User not found");
+        Runtime.trap("User profile not found");
       };
     };
   };
 
   public shared ({ caller }) func unblockUser(userId : Principal) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can unblock users");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
-        let updated = {
-          email = profile.email;
-          role = profile.role;
-          isBlocked = false;
-          coinBalance = profile.coinBalance;
-          bankDetails = profile.bankDetails;
+        let updatedProfile : UserProfile = {
+          profile with isBlocked = false;
         };
-        userProfiles.add(userId, updated);
+        userProfiles.add(userId, updatedProfile);
       };
       case null {
-        Runtime.trap("User not found");
+        Runtime.trap("User profile not found");
       };
     };
   };
 
+  // ------ Task Management ------
   public shared ({ caller }) func updateTask(taskId : Nat, title : Text, image : ?Blob, reward : Nat) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update tasks");
     };
     if (taskId >= 6) {
       Runtime.trap("Invalid task id");
     };
-    let task : Task.Task = {
+    let existingImage = switch (tasks.get(taskId)) {
+      case (?existingTask) { existingTask.image };
+      case null { null };
+    };
+    let task : Task = {
       id = taskId;
       title;
-      image;
+      image = switch (image) {
+        case (null) { existingImage };
+        case (?img) { ?img };
+      };
       reward;
     };
     tasks.add(taskId, task);
   };
 
-  public query ({ caller }) func getTasks() : async [Task.Task] {
-    if (not hasUserPermission(caller)) {
-      Runtime.trap("Unauthorized: Only authenticated users can view tasks");
+  func taskCompare(t1 : Task, t2 : Task) : Order.Order {
+    Nat.compare(t1.id, t2.id);
+  };
+
+  public query ({ caller }) func getTasks() : async [Task] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view tasks");
     };
     if (isUserBlocked(caller)) {
       Runtime.trap("Unauthorized: User is blocked");
     };
-    tasks.values().toArray().sort();
+    tasks.values().toArray().sort(taskCompare);
   };
 
+  // ------ Submission Management ------
   public shared ({ caller }) func submitTask(taskId : Nat, file : Blob) : async () {
-    if (not hasUserPermission(caller)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can submit tasks");
     };
     if (isUserBlocked(caller)) {
@@ -321,7 +397,17 @@ actor {
     if (taskId >= 6) {
       Runtime.trap("Invalid task id");
     };
-    let submission : Submission.Submission = {
+
+    switch (submissions.values().find(
+      func(submission) {
+        submission.userId == caller and submission.taskId == taskId
+      }
+    )) {
+      case (null) {};
+      case (?_) { Runtime.trap("User has already submitted for this task."); };
+    };
+
+    let submission : Submission = {
       id = nextSubmissionId;
       userId = caller;
       taskId;
@@ -340,7 +426,7 @@ actor {
   };
 
   public shared ({ caller }) func reviewSubmission(submissionId : Nat, approve : Bool) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can review submissions");
     };
     switch (submissions.get(submissionId)) {
@@ -382,35 +468,31 @@ actor {
     };
   };
 
-  public query ({ caller }) func getUserSubmissions(userId : Principal) : async [Submission.Submission] {
-    if (not hasUserPermission(caller)) {
-      Runtime.trap("Unauthorized: Only authenticated users can view submissions");
-    };
-    if (caller != userId) {
+  public query ({ caller }) func getUserSubmissions(userId : Principal) : async [Submission] {
+    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own submissions");
     };
     if (isUserBlocked(caller)) {
       Runtime.trap("Unauthorized: User is blocked");
     };
-    submissions.values().toArray().filter(func(s : Submission.Submission) : Bool {
+    submissions.values().toArray().filter(func(s : Submission) : Bool {
       s.userId == userId
-    }).sort();
+    });
   };
 
-  public query ({ caller }) func getAllSubmissions() : async [Submission.Submission] {
-    if (caller.isAnonymous()) {
+  public query ({ caller }) func getAllSubmissions() : async [Submission] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all submissions");
     };
-    submissions.values().toArray().sort();
+    submissions.values().toArray();
   };
 
   // --- PaymentRequest Functions ---
-
   public shared ({ caller }) func requestPayment(amount : Nat) : async () {
-    ensureUserRegistered(caller);
-    if (not hasUserPermission(caller)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can request payments");
     };
+    ensureUserRegistered(caller);
     if (isUserBlocked(caller)) {
       Runtime.trap("Unauthorized: User is blocked");
     };
@@ -419,6 +501,7 @@ actor {
       case (?profile) { profile };
       case (null) { Runtime.trap("User profile not found") };
     };
+
     if (callerProfile.coinBalance < amount) {
       Runtime.trap("Insufficient coin balance for withdrawal");
     };
@@ -437,7 +520,7 @@ actor {
   };
 
   public shared ({ caller }) func reviewPayment(paymentId : Nat, approve : Bool) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can review payments");
     };
     switch (paymentRequests.get(paymentId)) {
@@ -485,7 +568,7 @@ actor {
   };
 
   public shared ({ caller }) func updatePaymentStatus(paymentId : Nat, newStatus : { #approved; #inPayment; #transferred; #declined }) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update payment status");
     };
 
@@ -534,10 +617,7 @@ actor {
   };
 
   public query ({ caller }) func getUserPayments(userId : Principal) : async [PaymentRequest] {
-    if (not hasUserPermission(caller)) {
-      Runtime.trap("Unauthorized: Only authenticated users can view payments");
-    };
-    if (caller != userId) {
+    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own payments");
     };
     if (isUserBlocked(caller)) {
@@ -549,14 +629,15 @@ actor {
   };
 
   public query ({ caller }) func getAllPayments() : async [PaymentRequest] {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all payments");
     };
     paymentRequests.values().toArray();
   };
 
+  // ------ User Analytics ------
   public shared ({ caller }) func recordLastLogin() : async () {
-    if (not hasUserPermission(caller)) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can record login");
     };
     if (isUserBlocked(caller)) {
@@ -584,8 +665,8 @@ actor {
     tasksCompleted : Nat;
     totalSubmissions : Nat;
   } {
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only authenticated users can view analytics");
+    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own analytics");
     };
     switch (userAnalytics.get(userId)) {
       case (?analytics) {
@@ -604,21 +685,20 @@ actor {
   public query ({ caller }) func getAllUsersAnalytics() : async [{
     userId : Principal;
     email : Text;
+    uniqueId : ?Text;
     lastLogin : ?Int;
     tasksCompleted : Nat;
     totalSubmissions : Nat;
+    coinBalance : Nat;
+    isBlocked : Bool;
+    bankDetails : ?BankDetails;
   }] {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all analytics");
     };
-    userProfiles.entries().toArray().map(
-      func((userId, profile) : (Principal, UserProfile)) : {
-        userId : Principal;
-        email : Text;
-        lastLogin : ?Int;
-        tasksCompleted : Nat;
-        totalSubmissions : Nat;
-      } {
+
+    let array = userProfiles.entries().toArray().map(
+      func((userId, profile)) {
         let analytics = switch (userAnalytics.get(userId)) {
           case (?a) { a };
           case null {
@@ -628,23 +708,32 @@ actor {
         {
           userId;
           email = profile.email;
+          uniqueId = profile.uniqueId;
           lastLogin = analytics.lastLogin;
           tasksCompleted = analytics.tasksCompleted;
           totalSubmissions = analytics.totalSubmissions;
+          coinBalance = profile.coinBalance;
+          isBlocked = profile.isBlocked;
+          bankDetails = profile.bankDetails;
         };
       }
     );
+
+    array;
   };
 
-  // NEW FUNCTIONS
+  // Bank Details Functions
 
   public shared ({ caller }) func saveBankDetails(ifscCode : Text, bankName : Text, accountNumber : Text) : async () {
-    ensureUserRegistered(caller);
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Anonymous users cannot save bank details");
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save bank details");
     };
+    ensureUserRegistered(caller);
     switch (userProfiles.get(caller)) {
       case (?existingProfile) {
+        if (existingProfile.isBlocked) {
+          Runtime.trap("Unauthorized: User is blocked");
+        };
         switch (existingProfile.bankDetails) {
           case (?_) {
             Runtime.trap("Bank details already saved and cannot be changed. Contact admin.");
@@ -672,6 +761,7 @@ actor {
             bankName;
             accountNumber;
           };
+          uniqueId = null;
         };
         userProfiles.add(caller, newProfile);
       };
@@ -679,7 +769,7 @@ actor {
   };
 
   public shared ({ caller }) func adminUpdateBankDetails(userId : Principal, ifscCode : Text, bankName : Text, accountNumber : Text) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can update bank details");
     };
     switch (userProfiles.get(userId)) {
@@ -700,8 +790,8 @@ actor {
   };
 
   public query ({ caller }) func getBankDetails(userId : Principal) : async ?BankDetails {
-    if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only authenticated users can view bank details");
+    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own bank details");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) { profile.bankDetails };
@@ -710,7 +800,7 @@ actor {
   };
 
   public shared ({ caller }) func freezeAccountForCheat(userId : Principal) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can freeze accounts");
     };
     switch (userProfiles.get(userId)) {
@@ -726,26 +816,25 @@ actor {
     };
   };
 
-  // NEW: PIN-based Admin Check
   public query ({ caller }) func isPinAdmin() : async Bool {
-    not caller.isAnonymous();
+    AccessControl.isAdmin(accessControlState, caller);
   };
 
-  func generateOrderId() : Text {
-    let timestamp = Time.now();
-    let tsNat = if (timestamp < 0) { 0 } else { Int.abs(timestamp) };
-    let modNumber = tsNat % 1_000_000_000_000;
-    let ret = modNumber.toText();
-    if (ret.size() < 12) {
-      let zerosNeeded = 12 - ret.size();
-      "0" # zerosNeeded.toText() # ret;
-    } else {
-      ret;
+  // --- Task only on startup ---
+  private func initTasks() {
+    for (i in [0, 1, 2, 3, 4, 5].values()) {
+      tasks.add(i, {
+        id = i;
+        title = "Task " # i.toText();
+        image = null;
+        reward = if (i == 0) { 11 } else { 0 };
+      });
     };
   };
+  initTasks();
 
   public shared ({ caller }) func deleteUser(userId : Principal) : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can delete users");
     };
 
@@ -779,7 +868,7 @@ actor {
   };
 
   public shared ({ caller }) func clearAllData() : async () {
-    if (caller.isAnonymous()) {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can clear all data");
     };
 

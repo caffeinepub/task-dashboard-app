@@ -63,6 +63,7 @@ export const UserProfile = IDL.Record({
   'coinBalance' : IDL.Nat,
   'isBlocked' : IDL.Bool,
   'role' : IDL.Text,
+  'uniqueId' : IDL.Opt(IDL.Text),
   'email' : IDL.Text,
 });
 export const Task = IDL.Record({
@@ -119,7 +120,11 @@ export const idlService = IDL.Service({
       [
         IDL.Vec(
           IDL.Record({
+            'bankDetails' : IDL.Opt(BankDetails),
+            'coinBalance' : IDL.Nat,
             'userId' : IDL.Principal,
+            'isBlocked' : IDL.Bool,
+            'uniqueId' : IDL.Opt(IDL.Text),
             'tasksCompleted' : IDL.Nat,
             'email' : IDL.Text,
             'totalSubmissions' : IDL.Nat,
@@ -146,6 +151,23 @@ export const idlService = IDL.Service({
           'totalSubmissions' : IDL.Nat,
           'lastLogin' : IDL.Opt(IDL.Int),
         }),
+      ],
+      ['query'],
+    ),
+  'getUserByUniqueId' : IDL.Func(
+      [IDL.Text],
+      [
+        IDL.Opt(
+          IDL.Record({
+            'userId' : IDL.Principal,
+            'analytics' : IDL.Record({
+              'tasksCompleted' : IDL.Nat,
+              'totalSubmissions' : IDL.Nat,
+              'lastLogin' : IDL.Opt(IDL.Int),
+            }),
+            'profile' : UserProfile,
+          })
+        ),
       ],
       ['query'],
     ),
@@ -258,6 +280,7 @@ export const idlFactory = ({ IDL }) => {
     'coinBalance' : IDL.Nat,
     'isBlocked' : IDL.Bool,
     'role' : IDL.Text,
+    'uniqueId' : IDL.Opt(IDL.Text),
     'email' : IDL.Text,
   });
   const Task = IDL.Record({
@@ -314,7 +337,11 @@ export const idlFactory = ({ IDL }) => {
         [
           IDL.Vec(
             IDL.Record({
+              'bankDetails' : IDL.Opt(BankDetails),
+              'coinBalance' : IDL.Nat,
               'userId' : IDL.Principal,
+              'isBlocked' : IDL.Bool,
+              'uniqueId' : IDL.Opt(IDL.Text),
               'tasksCompleted' : IDL.Nat,
               'email' : IDL.Text,
               'totalSubmissions' : IDL.Nat,
@@ -341,6 +368,23 @@ export const idlFactory = ({ IDL }) => {
             'totalSubmissions' : IDL.Nat,
             'lastLogin' : IDL.Opt(IDL.Int),
           }),
+        ],
+        ['query'],
+      ),
+    'getUserByUniqueId' : IDL.Func(
+        [IDL.Text],
+        [
+          IDL.Opt(
+            IDL.Record({
+              'userId' : IDL.Principal,
+              'analytics' : IDL.Record({
+                'tasksCompleted' : IDL.Nat,
+                'totalSubmissions' : IDL.Nat,
+                'lastLogin' : IDL.Opt(IDL.Int),
+              }),
+              'profile' : UserProfile,
+            })
+          ),
         ],
         ['query'],
       ),

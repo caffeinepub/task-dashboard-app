@@ -51,6 +51,7 @@ export interface UserProfile {
   'coinBalance' : bigint,
   'isBlocked' : boolean,
   'role' : string,
+  'uniqueId' : [] | [string],
   'email' : string,
 }
 export type UserRole = { 'admin' : null } |
@@ -101,7 +102,11 @@ export interface _SERVICE {
     [],
     Array<
       {
+        'bankDetails' : [] | [BankDetails],
+        'coinBalance' : bigint,
         'userId' : Principal,
+        'isBlocked' : boolean,
+        'uniqueId' : [] | [string],
         'tasksCompleted' : bigint,
         'email' : string,
         'totalSubmissions' : bigint,
@@ -121,6 +126,20 @@ export interface _SERVICE {
       'totalSubmissions' : bigint,
       'lastLogin' : [] | [bigint],
     }
+  >,
+  'getUserByUniqueId' : ActorMethod<
+    [string],
+    [] | [
+      {
+        'userId' : Principal,
+        'analytics' : {
+          'tasksCompleted' : bigint,
+          'totalSubmissions' : bigint,
+          'lastLogin' : [] | [bigint],
+        },
+        'profile' : UserProfile,
+      }
+    ]
   >,
   'getUserPayments' : ActorMethod<[Principal], Array<PaymentRequest>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
