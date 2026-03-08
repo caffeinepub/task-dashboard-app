@@ -372,6 +372,44 @@ export function useRecordLastLogin() {
   });
 }
 
+// ─── Admin User Management ─────────────────────────────────────────────────
+
+export function useDeleteUser() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.deleteUser(userId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allUsersAnalytics"] });
+      void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["allPayments"] });
+    },
+  });
+}
+
+export function useClearAllData() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Not connected");
+      return actor.clearAllData();
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allSubmissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["allPayments"] });
+      void queryClient.invalidateQueries({ queryKey: ["allUsersAnalytics"] });
+      void queryClient.invalidateQueries({ queryKey: ["userSubmissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["userPayments"] });
+      void queryClient.invalidateQueries({ queryKey: ["coinBalance"] });
+      void queryClient.invalidateQueries({ queryKey: ["callerProfile"] });
+    },
+  });
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 /** Convert a Uint8Array image to an object URL (remember to revoke). */

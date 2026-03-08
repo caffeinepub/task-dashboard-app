@@ -1,3 +1,14 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +24,7 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  ClipboardCopy,
   Clock,
   Coins,
   CreditCard,
@@ -23,13 +35,14 @@ import {
   RefreshCw,
   ShieldCheck,
   ShieldOff,
+  Trash2,
   Upload,
   User,
   Users,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { PaymentRequest, Submission, Task } from "../backend.d";
 import { TASK_CONFIG } from "../components/app/TaskCard";
@@ -42,6 +55,8 @@ import {
   useAllSubmissions,
   useAllUsersAnalytics,
   useBlockUser,
+  useClearAllData,
+  useDeleteUser,
   useGetBankDetails,
   useGetUserProfile,
   useReviewPayment,
@@ -53,6 +68,39 @@ import {
 
 interface AdminPageProps {
   onBack: () => void;
+}
+
+// ─── Copy Button ─────────────────────────────────────────────────────────────
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success("Copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy"
+      className="inline-flex items-center justify-center w-5 h-5 rounded-md transition-all duration-200 hover:opacity-80"
+      style={{ color: copied ? "oklch(0.72 0.18 155)" : "oklch(0.5 0.05 265)" }}
+    >
+      {copied ? (
+        <Check className="w-3 h-3" />
+      ) : (
+        <ClipboardCopy className="w-3 h-3" />
+      )}
+    </button>
+  );
 }
 
 // ─── Task Row ──────────────────────────────────────────────────────────────
@@ -346,6 +394,7 @@ function ExpandableUserCard({
   const reviewSubmission = useReviewSubmission();
   const reviewPayment = useReviewPayment();
   const adminUpdateBankDetails = useAdminUpdateBankDetails();
+  const deleteUser = useDeleteUser();
   const { data: bankDetails } = useGetBankDetails(
     expanded ? entry.userId : undefined,
   );
@@ -457,6 +506,15 @@ function ExpandableUserCard({
       toast.success("Bank details updated");
     } catch {
       toast.error("Failed to update bank details");
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    try {
+      await deleteUser.mutateAsync(entry.userId);
+      toast.success("User account deleted");
+    } catch {
+      toast.error("Failed to delete user account");
     }
   };
 
@@ -777,6 +835,14 @@ function ExpandableUserCard({
                             >
                               {Number(pmt.amount).toLocaleString()} DC
                             </p>
+                            {pmt.orderId && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9px] font-mono text-muted-foreground">
+                                  #{pmt.orderId}
+                                </span>
+                                <CopyButton text={pmt.orderId} />
+                              </div>
+                            )}
                             <p className="text-[10px] text-muted-foreground">
                               {new Date(
                                 Number(pmt.createdAt) / 1_000_000,
@@ -929,6 +995,79 @@ function ExpandableUserCard({
                   </Button>
                 </div>
               </div>
+
+              {/* Danger Zone — Delete Account */}
+              <div
+                className="pt-3 mt-1"
+                style={{
+                  borderTop: "1px solid oklch(var(--destructive) / 0.15)",
+                }}
+              >
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      data-ocid={`admin.user.delete_button.${index + 1}`}
+                      size="sm"
+                      disabled={deleteUser.isPending}
+                      className="w-full rounded-xl h-8 text-xs font-semibold"
+                      style={{
+                        background: "oklch(var(--destructive) / 0.12)",
+                        color: "oklch(var(--destructive))",
+                        border: "1px solid oklch(var(--destructive) / 0.3)",
+                      }}
+                    >
+                      {deleteUser.isPending ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <>
+                          <Trash2 className="w-3 h-3 mr-1.5" />
+                          Delete Account
+                        </>
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent
+                    data-ocid={`admin.user.delete_dialog.${index + 1}`}
+                    style={{
+                      background: "oklch(0.12 0.015 265)",
+                      border: "1px solid oklch(var(--destructive) / 0.3)",
+                    }}
+                  >
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-foreground font-display">
+                        Delete User Account?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="text-muted-foreground">
+                        This will permanently delete{" "}
+                        <strong className="text-foreground">
+                          {entry.email || shortPrincipal}
+                        </strong>{" "}
+                        and all their data including submissions, payments, and
+                        bank details. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel
+                        data-ocid={`admin.user.delete_cancel_button.${index + 1}`}
+                        className="rounded-xl border-border/50"
+                      >
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        data-ocid={`admin.user.delete_confirm_button.${index + 1}`}
+                        onClick={handleDeleteUser}
+                        className="rounded-xl"
+                        style={{
+                          background: "oklch(var(--destructive))",
+                          color: "white",
+                        }}
+                      >
+                        Delete Account
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
           </motion.div>
         )}
@@ -1020,6 +1159,14 @@ function PaymentRow({
             </div>
             <span className="text-muted-foreground text-xs">{createdDate}</span>
           </div>
+          {payment.orderId && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="text-[10px] font-mono text-muted-foreground">
+                Order #{payment.orderId}
+              </span>
+              <CopyButton text={payment.orderId} />
+            </div>
+          )}
         </div>
         <span
           className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0"
@@ -1295,6 +1442,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const { data: payments, isLoading: paymentsLoading } = useAllPayments();
   const { data: analyticsData, isLoading: analyticsLoading } =
     useAllUsersAnalytics();
+  const clearAllData = useClearAllData();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -1333,7 +1481,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1">
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center"
             style={{
@@ -1355,6 +1503,77 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </p>
           </div>
         </div>
+
+        {/* Clear All Data button */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              data-ocid="admin.clear_all_data_button"
+              size="sm"
+              disabled={clearAllData.isPending}
+              className="rounded-xl h-7 text-[10px] font-semibold px-2 flex-shrink-0"
+              style={{
+                background: "oklch(0.55 0.2 50 / 0.15)",
+                color: "oklch(0.75 0.2 50)",
+                border: "1px solid oklch(0.55 0.2 50 / 0.3)",
+              }}
+            >
+              {clearAllData.isPending ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <>
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Clear Data
+                </>
+              )}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent
+            data-ocid="admin.clear_all_data_dialog"
+            style={{
+              background: "oklch(0.12 0.015 265)",
+              border: "1px solid oklch(0.55 0.2 50 / 0.4)",
+            }}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-foreground font-display">
+                Clear ALL App Data?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-muted-foreground">
+                <strong className="text-orange-400">Warning:</strong> This will
+                clear ALL users' submissions, payments, and reset ALL coin
+                balances to 0. This affects every user in the app and cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                data-ocid="admin.clear_all_data_cancel_button"
+                className="rounded-xl border-border/50"
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                data-ocid="admin.clear_all_data_confirm_button"
+                onClick={async () => {
+                  try {
+                    await clearAllData.mutateAsync();
+                    toast.success("All data cleared and coins reset");
+                  } catch {
+                    toast.error("Failed to clear data");
+                  }
+                }}
+                className="rounded-xl"
+                style={{
+                  background: "oklch(0.55 0.2 50)",
+                  color: "white",
+                }}
+              >
+                Clear All Data
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </header>
 
       {/* Tabs */}

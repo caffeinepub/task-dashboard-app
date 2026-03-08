@@ -11,8 +11,8 @@ import Array "mo:core/Array";
 import Text "mo:core/Text";
 import Int "mo:core/Int";
 import Time "mo:core/Time";
-import Migration "migration";
 import Iter "mo:core/Iter";
+import Migration "migration";
 
 (with migration = Migration.run)
 actor {
@@ -46,6 +46,7 @@ actor {
     amount : Nat;
     status : { #pending; #accepted; #declined };
     createdAt : Int;
+    orderId : Text;
   };
 
   module Task {
@@ -417,6 +418,7 @@ actor {
       amount;
       status = #pending;
       createdAt = Time.now();
+      orderId = generateOrderId();
     };
     paymentRequests.add(nextPaymentId, request);
     nextPaymentId += 1;
@@ -431,35 +433,40 @@ actor {
         Runtime.trap("Payment request not found");
       };
       case (?request) {
-        if (request.status != #pending) {
-          Runtime.trap("Payment request already processed");
-        };
-        if (approve) {
-          switch (userProfiles.get(request.userId)) {
-            case (?profile) {
-              if (profile.coinBalance < request.amount) {
-                Runtime.trap("User does not have enough coins for this payment");
-              };
+        switch (request.status) {
+          case (#pending) {
+            if (approve) {
+              switch (userProfiles.get(request.userId)) {
+                case (?profile) {
+                  if (profile.coinBalance < request.amount) {
+                    Runtime.trap("User does not have enough coins for this payment");
+                  };
 
-              let updatedProfile = {
-                profile with coinBalance = profile.coinBalance - request.amount : Nat;
+                  let updatedProfile = {
+                    profile with coinBalance = profile.coinBalance - request.amount : Nat;
+                  };
+                  userProfiles.add(request.userId, updatedProfile);
+                };
+                case null {
+                  Runtime.trap("User not found");
+                };
               };
-              userProfiles.add(request.userId, updatedProfile);
             };
-            case null {
-              Runtime.trap("User not found");
+
+            let updated = {
+              id = request.id;
+              userId = request.userId;
+              amount = request.amount;
+              status = if (approve) { #accepted } else { #declined };
+              createdAt = request.createdAt;
+              orderId = request.orderId;
             };
+            paymentRequests.add(paymentId, updated);
+          };
+          case (_) {
+            Runtime.trap("Payment request already processed");
           };
         };
-
-        let updated = {
-          id = request.id;
-          userId = request.userId;
-          amount = request.amount;
-          status = if (approve) { #accepted } else { #declined };
-          createdAt = request.createdAt;
-        };
-        paymentRequests.add(paymentId, updated);
       };
     };
   };
@@ -660,5 +667,82 @@ actor {
   // NEW: PIN-based Admin Check
   public query ({ caller }) func isPinAdmin() : async Bool {
     not caller.isAnonymous();
+  };
+
+  func generateOrderId() : Text {
+    let timestamp = Time.now();
+    let tsNat = if (timestamp < 0) { 0 } else { Int.abs(timestamp) };
+    let modNumber = tsNat % 1_000_000_000_000;
+    let ret = modNumber.toText();
+    if (ret.size() < 12) {
+      let zerosNeeded = 12 - ret.size();
+      "0" # zerosNeeded.toText() # ret;
+    } else {
+      ret;
+    };
+  };
+
+  public shared ({ caller }) func deleteUser(userId : Principal) : async () {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Only PIN-authenticated users can delete users");
+    };
+
+    userProfiles.remove(userId);
+    userAnalytics.remove(userId);
+    autoRegisteredUsers.remove(userId);
+
+    let filteredSubmissions = submissions.filter(
+      func(_id, submission) {
+        submission.userId != userId;
+      }
+    );
+    submissions.clear();
+    filteredSubmissions.entries().forEach(
+      func((k, v)) {
+        submissions.add(k, v);
+      }
+    );
+
+    let filteredPayments = paymentRequests.filter(
+      func(_id, payment) {
+        payment.userId != userId;
+      }
+    );
+    paymentRequests.clear();
+    filteredPayments.entries().forEach(
+      func((k, v)) {
+        paymentRequests.add(k, v);
+      }
+    );
+  };
+
+  public shared ({ caller }) func clearAllData() : async () {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Only PIN-authenticated users can clear all data");
+    };
+
+    submissions.clear();
+    paymentRequests.clear();
+    nextSubmissionId := 0;
+    nextPaymentId := 0;
+
+    let updatedUserProfiles = userProfiles.map<Principal, UserProfile, UserProfile>(
+      func(_p, profile) {
+        { profile with coinBalance = 0 };
+      }
+    );
+    userProfiles.clear();
+    updatedUserProfiles.entries().forEach(
+      func((k, v)) {
+        userProfiles.add(k, v);
+      }
+    );
+
+    userAnalytics.forEach(
+      func(_p, analytics) {
+        analytics.tasksCompleted := 0;
+        analytics.totalSubmissions := 0;
+      }
+    );
   };
 };

@@ -33,6 +33,7 @@ export const PaymentRequest = IDL.Record({
   }),
   'userId' : IDL.Principal,
   'createdAt' : IDL.Int,
+  'orderId' : IDL.Text,
   'amount' : IDL.Nat,
 });
 export const TaskStatus = IDL.Variant({
@@ -103,7 +104,9 @@ export const idlService = IDL.Service({
     ),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'blockUser' : IDL.Func([IDL.Principal], [], []),
+  'clearAllData' : IDL.Func([], [], []),
   'deductCoins' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
+  'deleteUser' : IDL.Func([IDL.Principal], [], []),
   'freezeAccountForCheat' : IDL.Func([IDL.Principal], [], []),
   'getAllPayments' : IDL.Func([], [IDL.Vec(PaymentRequest)], ['query']),
   'getAllSubmissions' : IDL.Func([], [IDL.Vec(Submission)], ['query']),
@@ -208,6 +211,7 @@ export const idlFactory = ({ IDL }) => {
     }),
     'userId' : IDL.Principal,
     'createdAt' : IDL.Int,
+    'orderId' : IDL.Text,
     'amount' : IDL.Nat,
   });
   const TaskStatus = IDL.Variant({
@@ -278,7 +282,9 @@ export const idlFactory = ({ IDL }) => {
       ),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'blockUser' : IDL.Func([IDL.Principal], [], []),
+    'clearAllData' : IDL.Func([], [], []),
     'deductCoins' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
+    'deleteUser' : IDL.Func([IDL.Principal], [], []),
     'freezeAccountForCheat' : IDL.Func([IDL.Principal], [], []),
     'getAllPayments' : IDL.Func([], [IDL.Vec(PaymentRequest)], ['query']),
     'getAllSubmissions' : IDL.Func([], [IDL.Vec(Submission)], ['query']),

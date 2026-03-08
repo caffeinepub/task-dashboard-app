@@ -23,6 +23,7 @@ export interface PaymentRequest {
     { 'declined' : null },
   'userId' : Principal,
   'createdAt' : bigint,
+  'orderId' : string,
   'amount' : bigint,
 }
 export interface Submission {
@@ -82,7 +83,9 @@ export interface _SERVICE {
   >,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'blockUser' : ActorMethod<[Principal], undefined>,
+  'clearAllData' : ActorMethod<[], undefined>,
   'deductCoins' : ActorMethod<[Principal, bigint], undefined>,
+  'deleteUser' : ActorMethod<[Principal], undefined>,
   'freezeAccountForCheat' : ActorMethod<[Principal], undefined>,
   'getAllPayments' : ActorMethod<[], Array<PaymentRequest>>,
   'getAllSubmissions' : ActorMethod<[], Array<Submission>>,

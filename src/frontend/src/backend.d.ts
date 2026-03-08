@@ -23,6 +23,7 @@ export interface PaymentRequest {
     status: Variant_pending_accepted_declined;
     userId: Principal;
     createdAt: bigint;
+    orderId: string;
     amount: bigint;
 }
 export interface Submission {
@@ -60,7 +61,9 @@ export interface backendInterface {
     adminUpdateBankDetails(userId: Principal, ifscCode: string, bankName: string, accountNumber: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: Principal): Promise<void>;
+    clearAllData(): Promise<void>;
     deductCoins(userId: Principal, amount: bigint): Promise<void>;
+    deleteUser(userId: Principal): Promise<void>;
     freezeAccountForCheat(userId: Principal): Promise<void>;
     getAllPayments(): Promise<Array<PaymentRequest>>;
     getAllSubmissions(): Promise<Array<Submission>>;

@@ -1,8 +1,20 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Toaster } from "@/components/ui/sonner";
-import { Coins, Loader2, LogOut, ShieldOff } from "lucide-react";
+import {
+  AlertCircle,
+  BadgeCheck,
+  Building2,
+  Coins,
+  Loader2,
+  Lock,
+  LogOut,
+  ShieldOff,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AdminAuthGate } from "./components/app/AdminAuthGate";
 import { AuthScreen } from "./components/app/AuthScreen";
 import { BottomNav, type NavTab } from "./components/app/BottomNav";
@@ -13,9 +25,19 @@ import {
   useCallerProfile,
   useIsAdmin,
   useRecordLastLogin,
+  useSaveBankDetails,
 } from "./hooks/useQueries";
 import { HomePage } from "./pages/HomePage";
 import { ProfilePage } from "./pages/ProfilePage";
+
+// ── IFSC types ────────────────────────────────────────────────────────────────
+interface IFSCResponse {
+  BANK: string;
+  BRANCH: string;
+  CITY: string;
+  STATE: string;
+  IFSC: string;
+}
 
 // Detect if the current URL path is /admin
 const isAdminRoute =
@@ -263,6 +285,448 @@ function FreezeScreen({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
+// ── Bank Setup Screen ─────────────────────────────────────────────────────────
+
+function BankSetupScreen() {
+  const saveBankDetails = useSaveBankDetails();
+
+  const [step, setStep] = useState<1 | 2>(1);
+  const [ifscCode, setIfscCode] = useState("");
+  const [ifscVerified, setIfscVerified] = useState(false);
+  const [ifscLoading, setIfscLoading] = useState(false);
+  const [ifscError, setIfscError] = useState<string | null>(null);
+  const [bankInfo, setBankInfo] = useState<IFSCResponse | null>(null);
+  const [accountNumber, setAccountNumber] = useState("");
+  const [confirmAccount, setConfirmAccount] = useState("");
+  const [accountError, setAccountError] = useState<string | null>(null);
+
+  const handleVerifyIFSC = async () => {
+    const code = ifscCode.trim().toUpperCase();
+    if (!code || code.length < 11) {
+      setIfscError("Please enter a valid 11-character IFSC code");
+      return;
+    }
+    setIfscError(null);
+    setIfscVerified(false);
+    setIfscLoading(true);
+    try {
+      const res = await fetch(`https://ifsc.razorpay.com/${code}`);
+      if (!res.ok) {
+        setIfscError("Invalid IFSC code. Please check and try again.");
+        return;
+      }
+      const data: IFSCResponse = await res.json();
+      setBankInfo(data);
+      setIfscVerified(true);
+    } catch {
+      setIfscError(
+        "Could not verify IFSC. Please check your internet connection.",
+      );
+    } finally {
+      setIfscLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setAccountError(null);
+    if (!accountNumber.trim() || accountNumber.length < 9) {
+      setAccountError("Account number must be at least 9 digits");
+      return;
+    }
+    if (!/^\d+$/.test(accountNumber)) {
+      setAccountError("Account number must contain digits only");
+      return;
+    }
+    if (accountNumber !== confirmAccount) {
+      setAccountError("Account numbers do not match");
+      return;
+    }
+    if (!bankInfo) return;
+    try {
+      await saveBankDetails.mutateAsync({
+        ifscCode: ifscCode.trim().toUpperCase(),
+        bankName: bankInfo.BANK,
+        accountNumber: accountNumber.trim(),
+      });
+      toast.success("Bank account linked successfully!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const displayMsg = msg.includes(":")
+        ? msg.split(":").slice(-1)[0].trim()
+        : msg;
+      toast.error(
+        displayMsg || "Failed to save bank details. Please try again.",
+      );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      {/* Background decorative */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div
+          className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, oklch(0.82 0.18 85 / 0.06) 0%, transparent 65%)",
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.02]"
+          style={{
+            backgroundImage: `
+              linear-gradient(oklch(0.82 0.18 85) 1px, transparent 1px),
+              linear-gradient(90deg, oklch(0.82 0.18 85) 1px, transparent 1px)
+            `,
+            backgroundSize: "60px 60px",
+          }}
+        />
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="w-full max-w-sm relative z-10"
+      >
+        {/* Header */}
+        <div className="text-center mb-8">
+          <motion.div
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{
+              delay: 0.1,
+              duration: 0.4,
+              type: "spring",
+              stiffness: 200,
+            }}
+            className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-5"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.2), oklch(0.75 0.15 80 / 0.1))",
+              border: "1.5px solid oklch(0.82 0.18 85 / 0.4)",
+              boxShadow: "0 0 32px oklch(0.82 0.18 85 / 0.25)",
+            }}
+          >
+            <Building2
+              className="w-10 h-10"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+          </motion.div>
+          <motion.h1
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="font-display text-3xl font-bold tracking-tight"
+            style={{ color: "oklch(0.82 0.18 85)" }}
+          >
+            Link Bank Account
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="text-muted-foreground text-sm mt-1.5"
+          >
+            Required to receive your Dark Coin earnings
+          </motion.p>
+        </div>
+
+        {/* Step indicator */}
+        <div className="flex items-center gap-2 mb-5 justify-center">
+          {[1, 2].map((s) => (
+            <div key={s} className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300"
+                style={
+                  step >= s
+                    ? {
+                        background:
+                          "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                        color: "oklch(0.1 0.02 85)",
+                      }
+                    : {
+                        background: "oklch(0.2 0.02 265)",
+                        color: "oklch(0.5 0.05 265)",
+                        border: "1px solid oklch(0.3 0.03 265)",
+                      }
+                }
+              >
+                {s}
+              </div>
+              {s < 2 && (
+                <div
+                  className="w-8 h-0.5 rounded-full transition-all duration-300"
+                  style={{
+                    background:
+                      step > s
+                        ? "linear-gradient(90deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))"
+                        : "oklch(0.25 0.02 265)",
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25, duration: 0.4 }}
+          className="glass-card rounded-3xl p-6"
+          style={{ border: "1px solid oklch(0.82 0.18 85 / 0.12)" }}
+        >
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="text-center mb-2">
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  Verify Your Bank
+                </h2>
+                <p className="text-muted-foreground text-xs mt-1">
+                  Enter your IFSC code to auto-detect your bank
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  IFSC Code
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    data-ocid="bank_setup.ifsc_input"
+                    value={ifscCode}
+                    onChange={(e) => {
+                      setIfscCode(e.target.value.toUpperCase());
+                      setIfscVerified(false);
+                      setBankInfo(null);
+                      setIfscError(null);
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleVerifyIFSC()}
+                    placeholder="e.g. SBIN0001234"
+                    maxLength={11}
+                    className="h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50 font-mono uppercase flex-1"
+                  />
+                  <Button
+                    data-ocid="bank_setup.verify_button"
+                    onClick={handleVerifyIFSC}
+                    disabled={ifscLoading || ifscCode.length < 11}
+                    className="rounded-xl h-11 px-4 text-xs font-bold"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                      color: "oklch(0.1 0.02 85)",
+                    }}
+                  >
+                    {ifscLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Verify"
+                    )}
+                  </Button>
+                </div>
+                {ifscError && (
+                  <p className="text-xs text-destructive mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {ifscError}
+                  </p>
+                )}
+              </div>
+
+              {ifscVerified && bankInfo && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 rounded-2xl space-y-1"
+                  style={{
+                    background: "oklch(0.72 0.18 155 / 0.08)",
+                    border: "1px solid oklch(0.72 0.18 155 / 0.2)",
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <BadgeCheck
+                      className="w-4 h-4"
+                      style={{ color: "oklch(0.72 0.18 155)" }}
+                    />
+                    <span
+                      className="text-xs font-semibold"
+                      style={{ color: "oklch(0.72 0.18 155)" }}
+                    >
+                      Bank Verified
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-foreground">
+                    {bankInfo.BANK}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {bankInfo.BRANCH} · {bankInfo.CITY}, {bankInfo.STATE}
+                  </p>
+                </motion.div>
+              )}
+
+              {ifscVerified && (
+                <Button
+                  data-ocid="bank_setup.continue_button"
+                  onClick={() => setStep(2)}
+                  className="w-full h-11 rounded-2xl font-semibold"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                    color: "oklch(0.1 0.02 85)",
+                  }}
+                >
+                  Continue
+                </Button>
+              )}
+            </div>
+          )}
+
+          {step === 2 && bankInfo && (
+            <div className="space-y-4">
+              <div className="text-center mb-2">
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  Account Number
+                </h2>
+                <p className="text-muted-foreground text-xs mt-1">
+                  Enter and confirm your account number
+                </p>
+              </div>
+
+              {/* Bank badge */}
+              <div
+                className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                style={{
+                  background: "oklch(0.72 0.18 155 / 0.08)",
+                  border: "1px solid oklch(0.72 0.18 155 / 0.2)",
+                }}
+              >
+                <BadgeCheck
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: "oklch(0.72 0.18 155)" }}
+                />
+                <div>
+                  <p className="text-xs font-semibold text-foreground">
+                    {bankInfo.BANK}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {ifscCode}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Account Number
+                </Label>
+                <Input
+                  data-ocid="bank_setup.account_input"
+                  value={accountNumber}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "");
+                    setAccountNumber(val);
+                    setAccountError(null);
+                  }}
+                  placeholder="Enter account number"
+                  inputMode="numeric"
+                  maxLength={17}
+                  className="h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50 font-mono"
+                />
+              </div>
+
+              <div>
+                <Label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Confirm Account Number
+                </Label>
+                <Input
+                  data-ocid="bank_setup.confirm_account_input"
+                  value={confirmAccount}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "");
+                    setConfirmAccount(val);
+                    setAccountError(null);
+                  }}
+                  placeholder="Re-enter account number"
+                  inputMode="numeric"
+                  maxLength={17}
+                  className="h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50 font-mono"
+                />
+              </div>
+
+              {accountError && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {accountError}
+                </p>
+              )}
+
+              <div
+                className="flex items-start gap-2 px-3 py-2 rounded-xl"
+                style={{
+                  background: "oklch(0.82 0.18 85 / 0.05)",
+                  border: "1px solid oklch(0.82 0.18 85 / 0.12)",
+                }}
+              >
+                <Lock
+                  className="w-3 h-3 mt-0.5 flex-shrink-0"
+                  style={{ color: "oklch(0.82 0.18 85 / 0.6)" }}
+                />
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Bank details are saved permanently and cannot be changed
+                  later. Only admin can modify them.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  data-ocid="bank_setup.back_button"
+                  variant="outline"
+                  onClick={() => setStep(1)}
+                  className="rounded-xl flex-1 h-11 border-border/50 text-sm"
+                >
+                  Back
+                </Button>
+                <Button
+                  data-ocid="bank_setup.save_button"
+                  onClick={handleSave}
+                  disabled={
+                    saveBankDetails.isPending ||
+                    accountNumber.length < 9 ||
+                    accountNumber !== confirmAccount
+                  }
+                  className="rounded-xl flex-1 h-11 font-semibold text-sm btn-glow"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                    color: "oklch(0.1 0.02 85)",
+                  }}
+                >
+                  {saveBankDetails.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Save & Continue"
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </motion.div>
+
+        <p className="text-center text-xs text-muted-foreground mt-6">
+          &copy; {new Date().getFullYear()}.{" "}
+          <a
+            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-primary transition-colors"
+          >
+            Built with love using caffeine.ai
+          </a>
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -417,6 +881,26 @@ export default function App() {
             // Profile saved, the query will re-fetch automatically
           }}
         />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: "oklch(0.14 0.015 265)",
+              border: "1px solid oklch(0.24 0.03 265 / 0.6)",
+              color: "oklch(0.96 0.008 80)",
+            },
+          }}
+        />
+      </>
+    );
+  }
+
+  // ── Profile exists but no bank details → force bank setup ────────────────
+  // Skip for admin route (already handled above)
+  if (profile && !profile.bankDetails) {
+    return (
+      <>
+        <BankSetupScreen />
         <Toaster
           position="top-center"
           toastOptions={{

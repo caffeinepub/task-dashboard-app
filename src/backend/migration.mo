@@ -1,67 +1,39 @@
 import Map "mo:core/Map";
-import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
+import Principal "mo:core/Principal";
 
 module {
-  public type BankDetails = {
-    ifscCode : Text;
-    bankName : Text;
-    accountNumber : Text;
-  };
-
-  public type UserProfile = {
-    email : Text;
-    role : Text;
-    isBlocked : Bool;
-    coinBalance : Nat;
-    bankDetails : ?BankDetails;
-  };
-
-  public type PaymentRequest = {
+  type OldPaymentRequest = {
     id : Nat;
-    userId : Principal;
+    userId : Principal.Principal;
     amount : Nat;
     status : { #pending; #accepted; #declined };
     createdAt : Int;
   };
 
-  public type TaskStatus = {
-    #pending;
-    #approved;
-    #declined;
+  type OldActor = {
+    paymentRequests : Map.Map<Nat, OldPaymentRequest>;
   };
 
-  public type Task = {
+  type NewPaymentRequest = {
     id : Nat;
-    title : Text;
-    image : ?Blob;
-  };
-
-  public type Submission = {
-    id : Nat;
-    userId : Principal;
-    taskId : Nat;
-    file : Blob;
-    status : TaskStatus;
+    userId : Principal.Principal;
+    amount : Nat;
+    status : { #pending; #accepted; #declined };
     createdAt : Int;
+    orderId : Text;
   };
 
-  public type Actor = {
-    tasks : Map.Map<Nat, Task>;
-    submissions : Map.Map<Nat, Submission>;
-    nextSubmissionId : Nat;
-    userProfiles : Map.Map<Principal, UserProfile>;
-    paymentRequests : Map.Map<Nat, PaymentRequest>;
-    nextPaymentId : Nat;
-    userAnalytics : Map.Map<Principal, {
-      var lastLogin : ?Int;
-      var tasksCompleted : Nat;
-      var totalSubmissions : Nat;
-    }>;
-    autoRegisteredUsers : Map.Map<Principal, Bool>;
+  type NewActor = {
+    paymentRequests : Map.Map<Nat, NewPaymentRequest>;
   };
 
-  public func run(old : Actor) : Actor {
-    old;
+  public func run(old : OldActor) : NewActor {
+    let newPaymentRequests = old.paymentRequests.map<Nat, OldPaymentRequest, NewPaymentRequest>(
+      func(_id, oldRequest) {
+        { oldRequest with orderId = "" };
+      }
+    );
+    { old with paymentRequests = newPaymentRequests };
   };
 };

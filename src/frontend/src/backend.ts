@@ -108,6 +108,7 @@ export interface PaymentRequest {
     status: Variant_pending_accepted_declined;
     userId: Principal;
     createdAt: bigint;
+    orderId: string;
     amount: bigint;
 }
 export interface _CaffeineStorageCreateCertificateResult {
@@ -160,7 +161,9 @@ export interface backendInterface {
     adminUpdateBankDetails(userId: Principal, ifscCode: string, bankName: string, accountNumber: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: Principal): Promise<void>;
+    clearAllData(): Promise<void>;
     deductCoins(userId: Principal, amount: bigint): Promise<void>;
+    deleteUser(userId: Principal): Promise<void>;
     freezeAccountForCheat(userId: Principal): Promise<void>;
     getAllPayments(): Promise<Array<PaymentRequest>>;
     getAllSubmissions(): Promise<Array<Submission>>;
@@ -357,6 +360,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async clearAllData(): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.clearAllData();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.clearAllData();
+            return result;
+        }
+    }
     async deductCoins(arg0: Principal, arg1: bigint): Promise<void> {
         if (this.processError) {
             try {
@@ -368,6 +385,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.deductCoins(arg0, arg1);
+            return result;
+        }
+    }
+    async deleteUser(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteUser(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteUser(arg0);
             return result;
         }
     }
@@ -772,12 +803,14 @@ function from_candid_record_n12(_uploadFile: (file: ExternalBlob) => Promise<Uin
     };
     userId: Principal;
     createdAt: bigint;
+    orderId: string;
     amount: bigint;
 }): {
     id: bigint;
     status: Variant_pending_accepted_declined;
     userId: Principal;
     createdAt: bigint;
+    orderId: string;
     amount: bigint;
 } {
     return {
@@ -785,6 +818,7 @@ function from_candid_record_n12(_uploadFile: (file: ExternalBlob) => Promise<Uin
         status: from_candid_variant_n13(_uploadFile, _downloadFile, value.status),
         userId: value.userId,
         createdAt: value.createdAt,
+        orderId: value.orderId,
         amount: value.amount
     };
 }

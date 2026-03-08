@@ -16,7 +16,9 @@ import {
   ArrowDownToLine,
   BadgeCheck,
   Building2,
+  Check,
   CheckCircle,
+  ClipboardCopy,
   Clock,
   Coins,
   CreditCard,
@@ -30,7 +32,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import type { UserProfile } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
@@ -85,6 +87,7 @@ function WithdrawalDialog({
     amount: bigint;
     createdAt: bigint;
     userId: Principal;
+    orderId: string;
   }>;
 }) {
   const saveBankDetails = useSaveBankDetails();
@@ -500,7 +503,7 @@ function WithdrawalDialog({
                     }}
                     placeholder="Enter account number"
                     inputMode="numeric"
-                    maxLength={18}
+                    maxLength={17}
                     className="h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50 font-mono"
                   />
                 </div>
@@ -518,7 +521,7 @@ function WithdrawalDialog({
                     }}
                     placeholder="Re-enter account number"
                     inputMode="numeric"
-                    maxLength={18}
+                    maxLength={17}
                     className="h-11 rounded-xl bg-secondary/50 border-border/50 focus:border-primary/50 font-mono"
                   />
                 </div>
@@ -620,6 +623,39 @@ function WithdrawalDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Copy Order ID Button ────────────────────────────────────────────────────
+
+function CopyOrderIdButton({ orderId }: { orderId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(orderId);
+      setCopied(true);
+      toast.success("Order ID copied");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }, [orderId]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy Order ID"
+      className="inline-flex items-center justify-center w-5 h-5 rounded-md transition-all duration-200 hover:opacity-80"
+      style={{ color: copied ? "oklch(0.72 0.18 155)" : "oklch(0.5 0.05 265)" }}
+    >
+      {copied ? (
+        <Check className="w-3 h-3" />
+      ) : (
+        <ClipboardCopy className="w-3 h-3" />
+      )}
+    </button>
   );
 }
 
@@ -983,6 +1019,12 @@ export function ProfilePage({
                                 DC
                               </span>
                             </p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <p className="text-muted-foreground text-[10px] font-mono">
+                                #{payment.orderId}
+                              </p>
+                              <CopyOrderIdButton orderId={payment.orderId} />
+                            </div>
                             <p className="text-muted-foreground text-[10px]">
                               {dateStr}
                             </p>
