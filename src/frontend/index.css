@@ -196,6 +196,12 @@
     animation: fadeSlideUp 0.3s ease-out forwards;
   }
 
+  /* Button shimmer animation for task cards */
+  @keyframes shimmerSlide {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
   /* Gold accent nav active */
   .nav-active {
     color: oklch(var(--primary));

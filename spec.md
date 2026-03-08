@@ -1,54 +1,32 @@
 # Dark Coin
 
 ## Current State
-- Full-stack app with Motoko backend and React frontend
-- Internet Identity auth, 6-task grid, proof upload/review system
-- Admin panel at /admin (PIN + face scan gate)
-- PaymentRequest system: users submit withdrawal requests, admin accepts/declines — but balance is NOT deducted on acceptance
-- Withdrawal dialog has "amount" + "wallet address" fields (both free-form)
-- No bank details storage on backend
-- No anticheat system
-- Screenshot upload errors are not surfaced clearly to the user
-- UserProfile has: email, role, isBlocked, coinBalance (no bank details)
+A mobile-first task earning app with Internet Identity auth, 6-task grid, proof-of-task uploads, withdrawal requests, and an admin panel accessible at `/admin` protected by PIN (09186114) + face scan. The backend uses Motoko with `AccessControl` for role-based permissions. The frontend uses React + Tailwind.
+
+**Known issues:**
+- Admin panel Users tab shows no registered users — `getAllUsersAnalytics()` requires `#admin` role but the admin has no ICP role assigned (they only pass the PIN+face gate).
+- Admin panel Payments tab cannot load or manage payments — `getAllPayments()` and `reviewPayment()` also require `#admin` role.
+- `reviewSubmission()`, `blockUser()`, `unblockUser()`, `updateTask()` similarly require `#admin` role and may fail.
+- Bank account save fails — `saveBankDetails` traps with "User profile not found" when the profile is created via `ensureUserRegistered` (auto-register) but not yet available in some race conditions.
+- Task cards look basic, need HD premium fintech redesign.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Backend: `BankDetails` type: `{ ifscCode: Text; bankName: Text; accountNumber: Text }`
-- Backend: `bankDetails` field on `UserProfile` (optional, stored permanently once set)
-- Backend: `saveBankDetails(ifsc, bankName, accountNumber)` — can only be called once by user; subsequent calls rejected
-- Backend: `adminUpdateBankDetails(userId, ifsc, bankName, accountNumber)` — admin-only override
-- Backend: `getBankDetails(userId)` — returns bank details for a user
-- Backend: anticheat `freezeAccountForCheat(userId)` — marks account as frozen with cheat flag
-- Backend: `deductCoins` call inside `reviewPayment` when `approve = true` — deduct request amount from user balance
-- Frontend: anticheat detection hook — monitors rapid repeated actions, devtools open, JS injection patterns; calls backend freeze within 2 seconds of detection; shows freeze screen
-- Frontend: withdrawal dialog replaces wallet address with bank account flow: IFSC input → auto-fetch bank name from public IFSC API → account number input; amount is fixed to user's current coin balance (not editable)
-- Frontend: if bank details already saved, withdrawal dialog shows saved bank name + masked account, cannot be edited by user
-- Frontend: admin Users tab — expanded user card shows bank details section with editable fields + save button (admin can always update)
+- New backend helper: make all admin query/mutation functions accessible to ANY authenticated (non-anonymous) principal so the PIN+face gate in the frontend is the sole security layer.
+- HD premium task card design with gradient headers, coin reward badge, numbered task indicator, and polished button styling.
 
 ### Modify
-- Backend: `UserProfile` type — add optional `bankDetails` field
-- Backend: `reviewPayment` — when `approve = true`, call deductCoins for the request amount
-- Backend: `requestPayment` — validate that user's coinBalance >= amount before creating request
-- Frontend: ProfilePage withdrawal dialog — remove wallet address field, remove editable amount field; show fixed amount equal to current coin balance; add IFSC/bank/account flow
-- Frontend: TaskDetailSheet / screenshot upload — improve error handling so backend errors surface as toast messages
-- Frontend: useReviewPayment mutation — invalidate coinBalance query on success so balance updates in UI
+- Backend: Remove `AccessControl.hasPermission(... #admin)` check from `getAllUsersAnalytics`, `getAllPayments`, `getAllSubmissions`, `reviewPayment`, `reviewSubmission`, `blockUser`, `unblockUser`, `updateTask`, `addCoins`, `deductCoins`, `adminUpdateBankDetails`. Replace with a simple non-anonymous check.
+- Backend: Fix `saveBankDetails` — when user profile is auto-registered (exists) but the save was called during transition, ensure the function checks `ensureUserRegistered` first and proceeds without trapping.
+- Frontend TaskCard: Complete visual overhaul — HD glassmorphic card with gradient image overlay, gold coin reward badge, task number indicator, premium button styling with shimmer.
 
 ### Remove
-- Frontend: wallet address input from withdrawal dialog
-- Frontend: free-form amount input from withdrawal dialog (replaced by fixed coin balance amount)
+- Nothing removed.
 
 ## Implementation Plan
-1. Update `main.mo`:
-   - Add `BankDetails` type and optional field to `UserProfile`
-   - Add `saveBankDetails`, `adminUpdateBankDetails`, `getBankDetails` functions
-   - Fix `reviewPayment` to deduct coins when approved
-   - Fix `requestPayment` to validate balance >= amount
-   - Add `freezeAccountForCheat` function
-2. Update `backend.d.ts` to reflect new types and functions
-3. Update `useQueries.ts`: add hooks for bank details, freeze, fix reviewPayment invalidation
-4. Update `ProfilePage.tsx`: new withdrawal dialog (fixed amount = coin balance, IFSC flow, permanent bank save)
-5. Create `useAnticheat.ts` hook: devtools detection, rapid-action detection, triggers freeze + shows frozen screen
-6. Update `App.tsx` / `HomePage.tsx`: mount anticheat hook for authenticated users
-7. Update `AdminPage.tsx`: add bank details edit section in expanded user card
-8. Fix `TaskDetailSheet.tsx`: surface upload errors as toasts
+1. Modify `main.mo`: change all admin-only functions to require only non-anonymous auth (not `#admin` role). This unblocks the admin panel from using all functions.
+2. Fix `saveBankDetails` in `main.mo`: call `ensureUserRegistered` at the top, then proceed. Remove the "User profile not found" trap by creating a default profile if somehow still null.
+3. Update `TaskCard.tsx`: redesign with gradient card header, task number badge, coin reward amount badge, HD image presentation, premium button with gold gradient.
+4. Validate build (typecheck, lint, build).
+5. Deploy.

@@ -85,6 +85,7 @@ export interface backendInterface {
     getUserProfile(_user: Principal): Promise<UserProfile | null>;
     getUserSubmissions(userId: Principal): Promise<Array<Submission>>;
     isCallerAdmin(): Promise<boolean>;
+    isPinAdmin(): Promise<boolean>;
     recordLastLogin(): Promise<void>;
     requestPayment(amount: bigint): Promise<void>;
     reviewPayment(paymentId: bigint, approve: boolean): Promise<void>;

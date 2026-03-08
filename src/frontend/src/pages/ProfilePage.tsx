@@ -171,20 +171,34 @@ function WithdrawalDialog({
     }
     if (!bankInfo) return;
 
+    let bankSaved = false;
     try {
       await saveBankDetails.mutateAsync({
         ifscCode: ifscCode.trim().toUpperCase(),
         bankName: bankInfo.BANK,
         accountNumber: accountNumber.trim(),
       });
+      bankSaved = true;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      // If bank details already saved, proceed to payment
-      if (!msg.toLowerCase().includes("already")) {
-        toast.error("Failed to save bank details. Please try again.");
+      const msg = err instanceof Error ? err.message : String(err);
+      // If bank details were already saved previously, proceed to payment
+      if (msg.toLowerCase().includes("already")) {
+        bankSaved = true;
+      } else {
+        // Show specific error message from backend
+        const displayMsg = msg.includes(":")
+          ? msg.split(":").slice(-1)[0].trim()
+          : msg;
+        toast.error(
+          displayMsg
+            ? `Bank save failed: ${displayMsg}`
+            : "Failed to save bank details. Please try again.",
+        );
         return;
       }
     }
+
+    if (!bankSaved) return;
 
     // Now request payment
     try {
@@ -192,9 +206,13 @@ function WithdrawalDialog({
       toast.success("Withdrawal request submitted! Pending admin review.");
       handleOpenChange(false);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to submit withdrawal";
-      toast.error(msg);
+      const msg = err instanceof Error ? err.message : String(err);
+      const displayMsg = msg.includes(":")
+        ? msg.split(":").slice(-1)[0].trim()
+        : msg;
+      toast.error(
+        displayMsg || "Failed to submit withdrawal. Please try again.",
+      );
     }
   };
 

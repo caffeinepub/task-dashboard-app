@@ -185,6 +185,7 @@ export interface backendInterface {
     getUserProfile(_user: Principal): Promise<UserProfile | null>;
     getUserSubmissions(userId: Principal): Promise<Array<Submission>>;
     isCallerAdmin(): Promise<boolean>;
+    isPinAdmin(): Promise<boolean>;
     recordLastLogin(): Promise<void>;
     requestPayment(amount: bigint): Promise<void>;
     reviewPayment(paymentId: bigint, approve: boolean): Promise<void>;
@@ -573,6 +574,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.isCallerAdmin();
+            return result;
+        }
+    }
+    async isPinAdmin(): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.isPinAdmin();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.isPinAdmin();
             return result;
         }
     }

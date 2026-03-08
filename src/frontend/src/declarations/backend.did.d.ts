@@ -115,6 +115,7 @@ export interface _SERVICE {
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getUserSubmissions' : ActorMethod<[Principal], Array<Submission>>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'isPinAdmin' : ActorMethod<[], boolean>,
   'recordLastLogin' : ActorMethod<[], undefined>,
   'requestPayment' : ActorMethod<[bigint], undefined>,
   'reviewPayment' : ActorMethod<[bigint, boolean], undefined>,

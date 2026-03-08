@@ -43,6 +43,7 @@ import {
   useAllUsersAnalytics,
   useBlockUser,
   useGetBankDetails,
+  useGetUserProfile,
   useReviewPayment,
   useReviewSubmission,
   useTasks,
@@ -363,9 +364,18 @@ function ExpandableUserCard({
     }
   }, [bankDetails]);
 
-  // Get block status from the analytics (no direct isBlocked in analytics)
-  // We'll default to false and let block/unblock toasts confirm changes
+  // Get real block status from user profile
+  const { data: userProfile } = useGetUserProfile(
+    expanded ? entry.userId : undefined,
+  );
   const [isBlocked, setIsBlocked] = useState(false);
+
+  // Sync isBlocked from real profile data when it loads
+  useEffect(() => {
+    if (userProfile !== undefined && userProfile !== null) {
+      setIsBlocked(userProfile.isBlocked);
+    }
+  }, [userProfile]);
 
   const principalStr = entry.userId.toString();
   const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;

@@ -4,18 +4,14 @@ import {
   CheckCircle,
   Clock,
   ExternalLink,
-  ImageOff,
   Play,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import type { Submission, Task } from "../../backend.d";
-import {
-  getStatusClass,
-  getStatusLabel,
-  toObjectUrl,
-} from "../../hooks/useQueries";
+import { toObjectUrl } from "../../hooks/useQueries";
 
 // Task-specific configuration: links and default images per task index (0-based)
 export const TASK_CONFIG: Record<
@@ -35,39 +31,29 @@ interface TaskCardProps {
   onStart: (task: Task) => void;
 }
 
-const PLACEHOLDER_COLORS = [
-  "from-cyan-500/20 to-teal-500/20",
-  "from-violet-500/20 to-purple-500/20",
-  "from-amber-500/20 to-orange-500/20",
-  "from-emerald-500/20 to-green-500/20",
-  "from-rose-500/20 to-pink-500/20",
-  "from-blue-500/20 to-indigo-500/20",
+// Premium gradient palettes per task slot
+const CARD_GRADIENTS = [
+  { from: "oklch(0.22 0.08 85)", to: "oklch(0.14 0.04 265)" },
+  { from: "oklch(0.18 0.06 195)", to: "oklch(0.12 0.03 265)" },
+  { from: "oklch(0.20 0.07 155)", to: "oklch(0.13 0.03 265)" },
+  { from: "oklch(0.18 0.07 300)", to: "oklch(0.12 0.03 265)" },
+  { from: "oklch(0.20 0.06 25)", to: "oklch(0.13 0.03 265)" },
+  { from: "oklch(0.18 0.06 240)", to: "oklch(0.12 0.03 265)" },
 ];
 
-const ICON_COLORS = [
-  "text-cyan-400",
-  "text-violet-400",
-  "text-amber-400",
-  "text-emerald-400",
-  "text-rose-400",
-  "text-blue-400",
+const PLACEHOLDER_INITIALS_COLORS = [
+  "oklch(0.82 0.18 85)",
+  "oklch(0.75 0.18 195)",
+  "oklch(0.72 0.18 155)",
+  "oklch(0.70 0.20 300)",
+  "oklch(0.70 0.20 25)",
+  "oklch(0.70 0.18 240)",
 ];
-
-function StatusIcon({ status }: { status: string }) {
-  switch (status) {
-    case "approved":
-      return <CheckCircle className="w-3 h-3" />;
-    case "declined":
-      return <XCircle className="w-3 h-3" />;
-    default:
-      return <Clock className="w-3 h-3" />;
-  }
-}
 
 export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const colorIdx = index % PLACEHOLDER_COLORS.length;
+  const colorIdx = index % CARD_GRADIENTS.length;
   const taskConfig = TASK_CONFIG[index];
 
   useEffect(() => {
@@ -86,7 +72,6 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
   }, [task.image, taskConfig?.defaultImage]);
 
   const handleClick = () => {
-    // Block interaction if user already submitted this task
     if (hasSubmission) return;
     onStart(task);
   };
@@ -98,61 +83,160 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
   const isDeclined = statusStr === "declined";
   const isPending = statusStr === "pending";
 
+  const gradient = CARD_GRADIENTS[colorIdx];
+  const accentColor = PLACEHOLDER_INITIALS_COLORS[colorIdx];
+
   return (
     <motion.div
       data-ocid={`task.card.${index + 1}`}
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
-      className={`glass-card rounded-2xl overflow-hidden flex flex-col transition-transform duration-150 ${hasSubmission ? "cursor-default opacity-90" : "group cursor-pointer active:scale-[0.98]"}`}
+      transition={{ duration: 0.35, delay: index * 0.06, ease: "easeOut" }}
+      whileHover={
+        !hasSubmission
+          ? {
+              y: -3,
+              transition: { duration: 0.2, ease: "easeOut" },
+            }
+          : undefined
+      }
+      className={`group relative rounded-2xl overflow-hidden flex flex-col ${
+        hasSubmission ? "cursor-default" : "cursor-pointer"
+      }`}
+      style={{
+        background: `linear-gradient(160deg, ${gradient.from}, ${gradient.to})`,
+        border: "1px solid oklch(0.82 0.18 85 / 0.12)",
+        boxShadow: hasSubmission
+          ? "0 2px 12px oklch(0 0 0 / 0.4)"
+          : "0 4px 20px oklch(0 0 0 / 0.45), 0 1px 0 oklch(0.82 0.18 85 / 0.08) inset",
+      }}
       onClick={handleClick}
     >
-      {/* Task Image */}
-      <div className="relative aspect-[4/3] overflow-hidden">
+      {/* ── Hover glow overlay ── */}
+      {!hasSubmission && (
+        <div
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 60% at 50% 0%, oklch(0.82 0.18 85 / 0.08) 0%, transparent 70%)",
+          }}
+        />
+      )}
+
+      {/* ── Image area ── */}
+      <div className="relative aspect-[3/2] overflow-hidden">
         {imageUrl ? (
           <>
             {!imageLoaded && (
-              <div className="absolute inset-0 skeleton-shimmer" />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(135deg, ${gradient.from}, oklch(0.11 0.015 265))`,
+                }}
+              />
             )}
             <img
               src={imageUrl}
               alt={task.title}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"} ${hasSubmission ? "brightness-75" : ""}`}
+              className={`w-full h-full object-cover transition-all duration-500 ${
+                imageLoaded ? "opacity-100" : "opacity-0"
+              } ${hasSubmission ? "brightness-50 saturate-50" : "group-hover:scale-[1.03]"}`}
               onLoad={() => setImageLoaded(true)}
             />
           </>
         ) : (
           <div
-            className={`w-full h-full bg-gradient-to-br ${PLACEHOLDER_COLORS[colorIdx]} flex items-center justify-center ${hasSubmission ? "brightness-75" : ""}`}
+            className={`w-full h-full flex items-center justify-center ${
+              hasSubmission ? "opacity-50" : ""
+            }`}
+            style={{
+              background: `linear-gradient(135deg, ${gradient.from}, oklch(0.11 0.015 265))`,
+            }}
           >
-            <div className="flex flex-col items-center gap-2">
-              <ImageOff
-                className={`w-8 h-8 ${ICON_COLORS[colorIdx]} opacity-60`}
-              />
-              <span
-                className={`text-2xl font-display font-bold ${ICON_COLORS[colorIdx]} opacity-80`}
-              >
-                {task.title.charAt(0).toUpperCase()}
-              </span>
-            </div>
+            {/* Abstract pattern background */}
+            <div
+              className="absolute inset-0 opacity-10"
+              style={{
+                backgroundImage: `
+                  radial-gradient(circle at 30% 40%, ${accentColor} 0%, transparent 50%),
+                  radial-gradient(circle at 70% 60%, ${accentColor} 0%, transparent 40%)
+                `,
+              }}
+            />
+            {/* Large initial letter */}
+            <span
+              className="font-display font-black text-5xl relative z-10 select-none"
+              style={{
+                color: accentColor,
+                opacity: 0.7,
+                textShadow: `0 0 40px ${accentColor}`,
+              }}
+            >
+              {task.title.charAt(0).toUpperCase()}
+            </span>
           </div>
         )}
 
-        {/* APPROVED stamp */}
-        {isApproved && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div
-              className="border-4 rounded-lg px-3 py-1.5 rotate-[-15deg] select-none"
+        {/* Bottom gradient overlay — blends image into card body */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-1/2 pointer-events-none"
+          style={{
+            background: `linear-gradient(to top, ${gradient.to} 0%, transparent 100%)`,
+            opacity: 0.9,
+          }}
+        />
+
+        {/* ── Task number badge (top-left) ── */}
+        <div className="absolute top-2 left-2 z-20">
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase"
+            style={{
+              background: "oklch(0.08 0.01 265 / 0.75)",
+              border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+              color: "oklch(0.82 0.18 85)",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            Task {String(index + 1).padStart(2, "0")}
+          </span>
+        </div>
+
+        {/* ── Coin reward badge (top-right) — only for unsubmitted tasks ── */}
+        {!hasSubmission && (
+          <div className="absolute top-2 right-2 z-20">
+            <span
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold"
               style={{
-                borderColor: "oklch(0.65 0.18 155)",
-                boxShadow: "0 0 12px oklch(0.65 0.18 155 / 0.5)",
+                background:
+                  "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.25), oklch(0.75 0.15 80 / 0.2))",
+                border: "1px solid oklch(0.82 0.18 85 / 0.45)",
+                color: "oklch(0.92 0.1 88)",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              <Sparkles className="w-2.5 h-2.5" />
+              +10 DC
+            </span>
+          </div>
+        )}
+
+        {/* ── APPROVED stamp ── */}
+        {isApproved && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+            <div
+              className="px-3 py-1.5 rounded-lg rotate-[-12deg] select-none"
+              style={{
+                border: "3px solid oklch(0.65 0.18 155)",
+                boxShadow:
+                  "0 0 20px oklch(0.65 0.18 155 / 0.6), 0 0 40px oklch(0.65 0.18 155 / 0.3)",
               }}
             >
               <span
-                className="font-display font-black text-lg tracking-widest uppercase"
+                className="font-display font-black text-xl tracking-[0.2em] uppercase"
                 style={{
-                  color: "oklch(0.65 0.18 155)",
-                  textShadow: "0 0 8px oklch(0.65 0.18 155 / 0.7)",
+                  color: "oklch(0.72 0.18 155)",
+                  textShadow:
+                    "0 0 12px oklch(0.65 0.18 155 / 0.8), 0 0 24px oklch(0.65 0.18 155 / 0.5)",
                 }}
               >
                 APPROVED
@@ -161,21 +245,23 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           </div>
         )}
 
-        {/* DECLINED stamp */}
+        {/* ── DECLINED stamp ── */}
         {isDeclined && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
             <div
-              className="border-4 rounded-lg px-3 py-1.5 rotate-[-15deg] select-none"
+              className="px-3 py-1.5 rounded-lg rotate-[-12deg] select-none"
               style={{
-                borderColor: "oklch(0.55 0.2 25)",
-                boxShadow: "0 0 12px oklch(0.55 0.2 25 / 0.5)",
+                border: "3px solid oklch(0.55 0.2 25)",
+                boxShadow:
+                  "0 0 20px oklch(0.55 0.2 25 / 0.6), 0 0 40px oklch(0.55 0.2 25 / 0.3)",
               }}
             >
               <span
-                className="font-display font-black text-lg tracking-widest uppercase"
+                className="font-display font-black text-xl tracking-[0.2em] uppercase"
                 style={{
                   color: "oklch(0.65 0.2 25)",
-                  textShadow: "0 0 8px oklch(0.55 0.2 25 / 0.7)",
+                  textShadow:
+                    "0 0 12px oklch(0.55 0.2 25 / 0.8), 0 0 24px oklch(0.55 0.2 25 / 0.5)",
                 }}
               >
                 DECLINED
@@ -184,30 +270,63 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           </div>
         )}
 
-        {/* Pending badge (small, top-right) */}
+        {/* ── Pending pulsing badge ── */}
         {isPending && (
-          <div className="absolute top-2 right-2">
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusClass("pending")}`}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+            <motion.div
+              animate={{
+                boxShadow: [
+                  "0 0 12px oklch(0.82 0.18 85 / 0.4)",
+                  "0 0 28px oklch(0.82 0.18 85 / 0.7)",
+                  "0 0 12px oklch(0.82 0.18 85 / 0.4)",
+                ],
+              }}
+              transition={{
+                duration: 1.8,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "easeInOut",
+              }}
+              className="px-3 py-1.5 rounded-xl select-none"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.25), oklch(0.75 0.15 80 / 0.2))",
+                border: "2px solid oklch(0.82 0.18 85 / 0.6)",
+                backdropFilter: "blur(8px)",
+              }}
             >
-              <StatusIcon status="pending" />
-              {getStatusLabel("pending")}
-            </span>
+              <span
+                className="font-display font-bold text-sm tracking-wider uppercase flex items-center gap-1.5"
+                style={{ color: "oklch(0.92 0.1 88)" }}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                Under Review
+              </span>
+            </motion.div>
           </div>
-        )}
-
-        {/* Hover overlay — only for non-submitted */}
-        {!hasSubmission && (
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
         )}
       </div>
 
-      {/* Card Body */}
-      <div className="p-3 flex flex-col gap-2 flex-1">
-        <p className="font-display font-semibold text-foreground text-sm leading-tight line-clamp-2">
-          {task.title}
-        </p>
+      {/* ── Card Body ── */}
+      <div className="relative z-10 px-3 pt-2.5 pb-3 flex flex-col gap-2.5 flex-1">
+        {/* Task title */}
+        <div>
+          <p
+            className="font-display font-bold text-foreground text-sm leading-snug line-clamp-2"
+            style={{ letterSpacing: "-0.01em" }}
+          >
+            {task.title}
+          </p>
+          {!hasSubmission && (
+            <p
+              className="text-[10px] mt-0.5 font-medium"
+              style={{ color: "oklch(0.82 0.18 85 / 0.55)" }}
+            >
+              Earn Dark Coin rewards
+            </p>
+          )}
+        </div>
 
+        {/* ── CTA Button ── */}
         <Button
           data-ocid={`task.start_button.${index + 1}`}
           onClick={(e) => {
@@ -216,75 +335,111 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           }}
           disabled={hasSubmission}
           size="sm"
-          className="w-full rounded-xl h-8 text-xs font-semibold mt-auto transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full rounded-xl h-9 text-xs font-bold mt-auto transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed relative overflow-hidden"
           style={
             isApproved
               ? {
-                  background: "oklch(0.55 0.18 155 / 0.15)",
-                  color: "oklch(0.65 0.18 155)",
-                  border: "1px solid oklch(0.55 0.18 155 / 0.3)",
+                  background: "oklch(0.55 0.18 155 / 0.18)",
+                  color: "oklch(0.72 0.18 155)",
+                  border: "1px solid oklch(0.55 0.18 155 / 0.4)",
                 }
               : isDeclined
                 ? {
-                    background: "oklch(0.55 0.2 25 / 0.15)",
+                    background: "oklch(0.55 0.2 25 / 0.18)",
                     color: "oklch(0.65 0.2 25)",
-                    border: "1px solid oklch(0.55 0.2 25 / 0.3)",
+                    border: "1px solid oklch(0.55 0.2 25 / 0.4)",
                   }
                 : isPending
                   ? {
-                      background: "oklch(0.55 0.18 55 / 0.15)",
-                      color: "oklch(0.72 0.18 55)",
-                      border: "1px solid oklch(0.55 0.18 55 / 0.3)",
+                      background: "oklch(0.82 0.18 85 / 0.1)",
+                      color: "oklch(0.82 0.18 85 / 0.7)",
+                      border: "1px solid oklch(0.82 0.18 85 / 0.2)",
                     }
                   : {
                       background:
-                        "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.9), oklch(0.75 0.15 80 / 0.9))",
+                        "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.78 0.17 82))",
                       color: "oklch(0.1 0.02 85)",
+                      boxShadow: "0 0 16px oklch(0.82 0.18 85 / 0.35)",
                     }
           }
         >
+          {/* Shimmer effect on hover for active CTA */}
+          {!hasSubmission && (
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(90deg, transparent 0%, oklch(1 0 0 / 0.15) 50%, transparent 100%)",
+                backgroundSize: "200% 100%",
+                animation: "shimmerSlide 1.5s ease-in-out infinite",
+              }}
+            />
+          )}
           {isApproved ? (
             <>
-              <CheckCircle className="w-3 h-3 mr-1.5" />
+              <CheckCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               Approved
             </>
           ) : isDeclined ? (
             <>
-              <XCircle className="w-3 h-3 mr-1.5" />
+              <XCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               Declined
             </>
           ) : isPending ? (
             <>
-              <Clock className="w-3 h-3 mr-1.5" />
+              <Clock className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               Under Review
             </>
           ) : taskConfig?.link ? (
             <>
-              <ExternalLink className="w-3 h-3 mr-1.5" />
+              <ExternalLink className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               Start Task
             </>
           ) : (
             <>
-              <Play className="w-3 h-3 mr-1.5 fill-current" />
+              <Play className="w-3.5 h-3.5 mr-1.5 flex-shrink-0 fill-current" />
               Start Task
             </>
           )}
         </Button>
       </div>
+
+      {/* Shimmer keyframes injected once */}
+      <style>{`
+        @keyframes shimmerSlide {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+      `}</style>
     </motion.div>
   );
 }
 
 export function TaskCardSkeleton({ index }: { index: number }) {
+  const colorIdx = index % CARD_GRADIENTS.length;
+  const gradient = CARD_GRADIENTS[colorIdx];
   return (
     <div
       data-ocid={`task.card.${index + 1}`}
-      className="glass-card rounded-2xl overflow-hidden"
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: `linear-gradient(160deg, ${gradient.from}, ${gradient.to})`,
+        border: "1px solid oklch(0.82 0.18 85 / 0.08)",
+      }}
     >
-      <Skeleton className="aspect-[4/3] w-full skeleton-shimmer rounded-none" />
-      <div className="p-3 space-y-2">
-        <Skeleton className="h-4 w-3/4 skeleton-shimmer rounded-lg" />
-        <Skeleton className="h-8 w-full skeleton-shimmer rounded-xl" />
+      <Skeleton
+        className="aspect-[3/2] w-full skeleton-shimmer rounded-none"
+        style={{ opacity: 0.3 }}
+      />
+      <div className="px-3 pt-2.5 pb-3 space-y-2">
+        <Skeleton
+          className="h-3.5 w-4/5 skeleton-shimmer rounded-md"
+          style={{ opacity: 0.3 }}
+        />
+        <Skeleton
+          className="h-9 w-full skeleton-shimmer rounded-xl"
+          style={{ opacity: 0.2 }}
+        />
       </div>
     </div>
   );
