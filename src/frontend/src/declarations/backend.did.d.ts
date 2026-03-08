@@ -10,6 +10,11 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface BankDetails {
+  'ifscCode' : string,
+  'bankName' : string,
+  'accountNumber' : string,
+}
 export type Blob = Uint8Array;
 export interface PaymentRequest {
   'id' : bigint,
@@ -33,6 +38,7 @@ export type TaskStatus = { 'pending' : null } |
   { 'approved' : null } |
   { 'declined' : null };
 export interface UserProfile {
+  'bankDetails' : [] | [BankDetails],
   'coinBalance' : bigint,
   'isBlocked' : boolean,
   'role' : string,
@@ -70,9 +76,14 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addCoins' : ActorMethod<[Principal, bigint], undefined>,
+  'adminUpdateBankDetails' : ActorMethod<
+    [Principal, string, string, string],
+    undefined
+  >,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'blockUser' : ActorMethod<[Principal], undefined>,
   'deductCoins' : ActorMethod<[Principal, bigint], undefined>,
+  'freezeAccountForCheat' : ActorMethod<[Principal], undefined>,
   'getAllPayments' : ActorMethod<[], Array<PaymentRequest>>,
   'getAllSubmissions' : ActorMethod<[], Array<Submission>>,
   'getAllUsersAnalytics' : ActorMethod<
@@ -87,6 +98,7 @@ export interface _SERVICE {
       }
     >
   >,
+  'getBankDetails' : ActorMethod<[Principal], [] | [BankDetails]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCoinBalance' : ActorMethod<[Principal], bigint>,
@@ -107,6 +119,7 @@ export interface _SERVICE {
   'requestPayment' : ActorMethod<[bigint], undefined>,
   'reviewPayment' : ActorMethod<[bigint, boolean], undefined>,
   'reviewSubmission' : ActorMethod<[bigint, boolean], undefined>,
+  'saveBankDetails' : ActorMethod<[string, string, string], undefined>,
   'saveCallerUserProfile' : ActorMethod<
     [{ 'isBlocked' : boolean, 'role' : string, 'email' : string }],
     undefined

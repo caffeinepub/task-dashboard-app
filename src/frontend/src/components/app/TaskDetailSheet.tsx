@@ -124,7 +124,12 @@ export function TaskDetailSheet({
       toast.success("Proof submitted! Awaiting review.");
       setTimeout(() => onClose(), 1800);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Submission failed";
+      let msg = "Submission failed. Please try again.";
+      if (err instanceof Error) {
+        // ICP canister errors contain the trap message after a colon
+        const match = err.message.match(/Reject text: (.+)/);
+        msg = match ? match[1] : err.message;
+      }
       setSubmitError(msg);
       toast.error(msg);
     }

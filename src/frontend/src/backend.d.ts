@@ -8,6 +8,11 @@ export interface None {
 }
 export type Option<T> = Some<T> | None;
 export type Blob = Uint8Array;
+export interface BankDetails {
+    ifscCode: string;
+    bankName: string;
+    accountNumber: string;
+}
 export interface Task {
     id: bigint;
     title: string;
@@ -29,6 +34,7 @@ export interface Submission {
     taskId: bigint;
 }
 export interface UserProfile {
+    bankDetails?: BankDetails;
     coinBalance: bigint;
     isBlocked: boolean;
     role: string;
@@ -51,9 +57,11 @@ export enum Variant_pending_accepted_declined {
 }
 export interface backendInterface {
     addCoins(userId: Principal, amount: bigint): Promise<void>;
+    adminUpdateBankDetails(userId: Principal, ifscCode: string, bankName: string, accountNumber: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     blockUser(userId: Principal): Promise<void>;
     deductCoins(userId: Principal, amount: bigint): Promise<void>;
+    freezeAccountForCheat(userId: Principal): Promise<void>;
     getAllPayments(): Promise<Array<PaymentRequest>>;
     getAllSubmissions(): Promise<Array<Submission>>;
     getAllUsersAnalytics(): Promise<Array<{
@@ -63,6 +71,7 @@ export interface backendInterface {
         totalSubmissions: bigint;
         lastLogin?: bigint;
     }>>;
+    getBankDetails(userId: Principal): Promise<BankDetails | null>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCoinBalance(userId: Principal): Promise<bigint>;
@@ -80,6 +89,7 @@ export interface backendInterface {
     requestPayment(amount: bigint): Promise<void>;
     reviewPayment(paymentId: bigint, approve: boolean): Promise<void>;
     reviewSubmission(submissionId: bigint, approve: boolean): Promise<void>;
+    saveBankDetails(ifscCode: string, bankName: string, accountNumber: string): Promise<void>;
     saveCallerUserProfile(profile: {
         isBlocked: boolean;
         role: string;

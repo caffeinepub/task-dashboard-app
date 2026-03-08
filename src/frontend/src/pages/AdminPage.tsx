@@ -8,6 +8,7 @@ import {
   Activity,
   ArrowLeft,
   ArrowRightLeft,
+  Building2,
   Check,
   CheckCircle,
   ChevronDown,
@@ -36,10 +37,12 @@ import {
   getStatusClass,
   getStatusLabel,
   toObjectUrl,
+  useAdminUpdateBankDetails,
   useAllPayments,
   useAllSubmissions,
   useAllUsersAnalytics,
   useBlockUser,
+  useGetBankDetails,
   useReviewPayment,
   useReviewSubmission,
   useTasks,
@@ -341,6 +344,24 @@ function ExpandableUserCard({
   const unblockUser = useUnblockUser();
   const reviewSubmission = useReviewSubmission();
   const reviewPayment = useReviewPayment();
+  const adminUpdateBankDetails = useAdminUpdateBankDetails();
+  const { data: bankDetails } = useGetBankDetails(
+    expanded ? entry.userId : undefined,
+  );
+
+  // Bank edit state
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+
+  // Pre-fill bank fields when bank details load
+  useEffect(() => {
+    if (bankDetails) {
+      setBankIfsc(bankDetails.ifscCode);
+      setBankName(bankDetails.bankName);
+      setBankAccount(bankDetails.accountNumber);
+    }
+  }, [bankDetails]);
 
   // Get block status from the analytics (no direct isBlocked in analytics)
   // We'll default to false and let block/unblock toasts confirm changes
@@ -408,6 +429,24 @@ function ExpandableUserCard({
       toast.success(approve ? "Payment accepted!" : "Payment declined");
     } catch {
       toast.error("Failed to update payment");
+    }
+  };
+
+  const handleUpdateBankDetails = async () => {
+    if (!bankIfsc.trim() || !bankName.trim() || !bankAccount.trim()) {
+      toast.error("All bank fields are required");
+      return;
+    }
+    try {
+      await adminUpdateBankDetails.mutateAsync({
+        userId: entry.userId,
+        ifscCode: bankIfsc.trim().toUpperCase(),
+        bankName: bankName.trim(),
+        accountNumber: bankAccount.trim(),
+      });
+      toast.success("Bank details updated");
+    } catch {
+      toast.error("Failed to update bank details");
     }
   };
 
@@ -787,6 +826,98 @@ function ExpandableUserCard({
                     })}
                   </div>
                 )}
+              </div>
+
+              {/* Bank Details — admin editor */}
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <Building2
+                    className="w-3 h-3"
+                    style={{ color: "oklch(0.75 0.18 195)" }}
+                  />
+                  Bank Details
+                </p>
+                <div
+                  className="space-y-2.5 p-3 rounded-2xl"
+                  style={{
+                    background: "oklch(0.11 0.015 265 / 0.5)",
+                    border: "1px solid oklch(0.75 0.18 195 / 0.12)",
+                  }}
+                >
+                  {!bankDetails && (
+                    <p className="text-[10px] text-muted-foreground mb-1">
+                      No bank details saved yet
+                    </p>
+                  )}
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">
+                      IFSC Code
+                    </p>
+                    <Input
+                      data-ocid={`admin.user.bank_ifsc_input.${index + 1}`}
+                      value={bankIfsc}
+                      onChange={(e) =>
+                        setBankIfsc(e.target.value.toUpperCase())
+                      }
+                      placeholder="e.g. SBIN0001234"
+                      maxLength={11}
+                      className="h-8 text-xs rounded-xl bg-secondary/40 border-border/40 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">
+                      Bank Name
+                    </p>
+                    <Input
+                      data-ocid={`admin.user.bank_name_input.${index + 1}`}
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="Bank name"
+                      className="h-8 text-xs rounded-xl bg-secondary/40 border-border/40"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">
+                      Account Number
+                    </p>
+                    <Input
+                      data-ocid={`admin.user.bank_account_input.${index + 1}`}
+                      value={bankAccount}
+                      onChange={(e) =>
+                        setBankAccount(e.target.value.replace(/\D/g, ""))
+                      }
+                      placeholder="Account number"
+                      className="h-8 text-xs rounded-xl bg-secondary/40 border-border/40 font-mono"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <Button
+                    data-ocid={`admin.user.update_bank_button.${index + 1}`}
+                    size="sm"
+                    onClick={handleUpdateBankDetails}
+                    disabled={
+                      adminUpdateBankDetails.isPending ||
+                      !bankIfsc ||
+                      !bankName ||
+                      !bankAccount
+                    }
+                    className="w-full rounded-xl h-8 text-xs font-semibold"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                      color: "oklch(0.1 0.02 85)",
+                    }}
+                  >
+                    {adminUpdateBankDetails.isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <>
+                        <Check className="w-3 h-3 mr-1" />
+                        Update Bank Details
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </motion.div>

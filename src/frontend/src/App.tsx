@@ -1,11 +1,13 @@
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
-import { Coins, Loader2 } from "lucide-react";
+import { Coins, Loader2, LogOut, ShieldOff } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { AdminAuthGate } from "./components/app/AdminAuthGate";
 import { AuthScreen } from "./components/app/AuthScreen";
 import { BottomNav, type NavTab } from "./components/app/BottomNav";
 import { useActor } from "./hooks/useActor";
+import { useAnticheat } from "./hooks/useAnticheat";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import {
   useCallerProfile,
@@ -130,10 +132,142 @@ function SplashScreen() {
   );
 }
 
+// ── Freeze Screen Component ────────────────────────────────────────────────────
+
+function FreezeScreen({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="fixed inset-0 z-[999] flex flex-col items-center justify-center overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse 80% 70% at 50% 30%, oklch(0.25 0.12 25 / 0.9) 0%, oklch(0.08 0.03 25) 70%)",
+      }}
+    >
+      {/* Red grid overlay */}
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage: `
+            linear-gradient(oklch(0.6 0.25 25) 1px, transparent 1px),
+            linear-gradient(90deg, oklch(0.6 0.25 25) 1px, transparent 1px)
+          `,
+          backgroundSize: "40px 40px",
+        }}
+      />
+      {/* Glow pulse */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        animate={{
+          opacity: [0.15, 0.3, 0.15],
+        }}
+        transition={{
+          duration: 2.5,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+        }}
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 40% at 50% 20%, oklch(0.55 0.25 25 / 0.4) 0%, transparent 70%)",
+        }}
+      />
+
+      <div className="relative z-10 flex flex-col items-center gap-6 px-6 text-center max-w-sm">
+        {/* Dark Coin branding */}
+        <div className="flex items-center gap-2 mb-2">
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{
+              background: "oklch(0.55 0.25 25 / 0.2)",
+              border: "1px solid oklch(0.55 0.25 25 / 0.4)",
+            }}
+          >
+            <Coins
+              className="w-4 h-4"
+              style={{ color: "oklch(0.7 0.15 25)" }}
+            />
+          </div>
+          <span
+            className="font-display text-sm font-bold tracking-wide"
+            style={{ color: "oklch(0.7 0.15 25)" }}
+          >
+            Dark Coin
+          </span>
+        </div>
+
+        {/* Icon */}
+        <motion.div
+          animate={{
+            scale: [1, 1.04, 1],
+            boxShadow: [
+              "0 0 30px oklch(0.55 0.25 25 / 0.3), 0 0 60px oklch(0.55 0.25 25 / 0.15)",
+              "0 0 50px oklch(0.55 0.25 25 / 0.6), 0 0 100px oklch(0.55 0.25 25 / 0.3)",
+              "0 0 30px oklch(0.55 0.25 25 / 0.3), 0 0 60px oklch(0.55 0.25 25 / 0.15)",
+            ],
+          }}
+          transition={{
+            duration: 2,
+            repeat: Number.POSITIVE_INFINITY,
+            ease: "easeInOut",
+          }}
+          className="w-24 h-24 rounded-3xl flex items-center justify-center"
+          style={{
+            background: "oklch(0.55 0.25 25 / 0.15)",
+            border: "2px solid oklch(0.55 0.25 25 / 0.4)",
+          }}
+        >
+          <ShieldOff
+            className="w-12 h-12"
+            style={{ color: "oklch(0.65 0.25 25)" }}
+          />
+        </motion.div>
+
+        {/* Text */}
+        <div className="space-y-3">
+          <h1
+            className="font-display text-3xl font-bold tracking-tight"
+            style={{ color: "oklch(0.65 0.25 25)" }}
+          >
+            Account Frozen
+          </h1>
+          <p
+            className="text-sm leading-relaxed"
+            style={{ color: "oklch(0.55 0.12 25)" }}
+          >
+            Suspicious activity detected. Your account has been frozen.
+          </p>
+          <p className="text-xs" style={{ color: "oklch(0.45 0.1 25)" }}>
+            Please contact support to resolve this issue.
+          </p>
+        </div>
+
+        {/* Sign out */}
+        <Button
+          data-ocid="freeze.logout_button"
+          onClick={onSignOut}
+          variant="outline"
+          className="mt-2 h-11 px-8 rounded-2xl font-semibold"
+          style={{
+            borderColor: "oklch(0.55 0.25 25 / 0.4)",
+            color: "oklch(0.65 0.25 25)",
+            background: "oklch(0.55 0.25 25 / 0.1)",
+          }}
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          Sign Out
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const { identity, isInitializing, loginStatus } = useInternetIdentity();
+  const { identity, isInitializing, loginStatus, clear } =
+    useInternetIdentity();
   const isAuthenticated = !!identity;
 
   const { data: profile, isLoading: profileLoading } = useCallerProfile();
@@ -146,6 +280,14 @@ export default function App() {
 
   // Track whether the user was previously unauthenticated (for detecting fresh login)
   const prevAuthRef = useRef(false);
+
+  // ── Anticheat — called at top level (rules of hooks) ──────────────────────
+  // principal and profile may be undefined/null; hook handles those cases gracefully
+  const principal = identity?.getPrincipal();
+  const { isFrozen } = useAnticheat(
+    principal,
+    isAuthenticated && !!profile && !isAdminRoute,
+  );
 
   // Record last login only after the user has a profile (i.e., they're already registered).
   // Calling this before saveCallerUserProfile causes a permission error for new users.
@@ -289,7 +431,23 @@ export default function App() {
     );
   }
 
-  const principal = identity?.getPrincipal();
+  if (isFrozen) {
+    return (
+      <>
+        <FreezeScreen onSignOut={() => clear()} />
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: "oklch(0.14 0.015 265)",
+              border: "1px solid oklch(0.24 0.03 265 / 0.6)",
+              color: "oklch(0.96 0.008 80)",
+            },
+          }}
+        />
+      </>
+    );
+  }
 
   return (
     <>

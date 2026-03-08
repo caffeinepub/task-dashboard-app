@@ -3,6 +3,79 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TaskStatus } from "../backend.d";
 import { useActor } from "./useActor";
 
+// ─── Bank Details ───────────────────────────────────────────────────────────
+
+export function useGetBankDetails(userId: Principal | undefined) {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["bankDetails", userId?.toString()],
+    queryFn: async () => {
+      if (!actor || !userId) return null;
+      return actor.getBankDetails(userId);
+    },
+    enabled: !!actor && !isFetching && !!userId,
+  });
+}
+
+export function useSaveBankDetails() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ifscCode,
+      bankName,
+      accountNumber,
+    }: { ifscCode: string; bankName: string; accountNumber: string }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.saveBankDetails(ifscCode, bankName, accountNumber);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["callerProfile"] });
+      void queryClient.invalidateQueries({ queryKey: ["bankDetails"] });
+    },
+  });
+}
+
+export function useAdminUpdateBankDetails() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      ifscCode,
+      bankName,
+      accountNumber,
+    }: {
+      userId: Principal;
+      ifscCode: string;
+      bankName: string;
+      accountNumber: string;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.adminUpdateBankDetails(
+        userId,
+        ifscCode,
+        bankName,
+        accountNumber,
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allUsersAnalytics"] });
+      void queryClient.invalidateQueries({ queryKey: ["bankDetails"] });
+    },
+  });
+}
+
+export function useFreezeAccountForCheat() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (userId: Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.freezeAccountForCheat(userId);
+    },
+  });
+}
+
 // ─── Auth / Profile ────────────────────────────────────────────────────────
 
 export function useCallerProfile() {
@@ -268,6 +341,9 @@ export function useReviewPayment() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["allPayments"] });
+      void queryClient.invalidateQueries({ queryKey: ["userPayments"] });
+      void queryClient.invalidateQueries({ queryKey: ["coinBalance"] });
+      void queryClient.invalidateQueries({ queryKey: ["callerProfile"] });
     },
   });
 }
