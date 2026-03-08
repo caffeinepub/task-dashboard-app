@@ -67,6 +67,7 @@ import {
   useUpdatePaymentStatus,
   useUpdateTask,
 } from "../hooks/useQueries";
+import { getTaskLink, setTaskLink } from "../lib/taskLinks";
 
 interface AdminPageProps {
   onBack: () => void;
@@ -111,11 +112,24 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
   const updateTask = useUpdateTask();
   const [title, setTitle] = useState(task.title);
   const taskConfig = TASK_CONFIG[index];
-  const [startLink, setStartLink] = useState(taskConfig?.link ?? "");
+  // Pre-populate link from localStorage first, then fall back to TASK_CONFIG
+  const [startLink, setStartLink] = useState(
+    () => getTaskLink(index) ?? taskConfig?.link ?? "",
+  );
   const [reward, setReward] = useState<number>(Number(task.reward) || 0);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<Uint8Array | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Sync startLink from localStorage when index changes
+  useEffect(() => {
+    const stored = getTaskLink(index);
+    if (stored) {
+      setStartLink(stored);
+    } else if (taskConfig?.link) {
+      setStartLink(taskConfig.link);
+    }
+  }, [index, taskConfig?.link]);
 
   useEffect(() => {
     const img = task.image as Uint8Array | undefined;
@@ -139,7 +153,7 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     setPendingImage(data);
-    const url = URL.createObjectURL(new Blob([data]));
+    const url = URL.createObjectURL(new Blob([data], { type: file.type }));
     setImageUrl(url);
   };
 
@@ -158,6 +172,8 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
         image: imageToSave,
         reward: BigInt(reward),
       });
+      // Persist the link to localStorage after successful save
+      setTaskLink(index, startLink);
       setPendingImage(null);
       toast.success(`Task ${index + 1} updated`);
     } catch (err) {

@@ -13,6 +13,7 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import type { Submission, Task } from "../../backend.d";
 import { toObjectUrl } from "../../hooks/useQueries";
+import { getTaskLink } from "../../lib/taskLinks";
 
 // Task-specific configuration: links and default images per task index (0-based)
 export const TASK_CONFIG: Record<
@@ -57,6 +58,9 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
   const colorIdx = index % CARD_GRADIENTS.length;
   const taskConfig = TASK_CONFIG[index];
 
+  // Effective link: localStorage first, then TASK_CONFIG fallback
+  const effectiveLink = getTaskLink(index) ?? taskConfig?.link;
+
   useEffect(() => {
     if (task.image && task.image.length > 0) {
       const url = toObjectUrl(task.image);
@@ -72,7 +76,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
     setImageUrl(null);
   }, [task.image, taskConfig?.defaultImage]);
 
-  // Detect "empty" tasks: no backend image, default title pattern, no config link
+  // Detect "empty" tasks: no backend image, default title pattern, no link
   const DEFAULT_TASK_TITLES = [
     "Task 0",
     "Task 1",
@@ -83,7 +87,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
   ];
   const hasBackendImage = !!(task.image && task.image.length > 0);
   const hasDefaultTitle = DEFAULT_TASK_TITLES.includes(task.title);
-  const hasConfigLink = !!taskConfig?.link;
+  const hasConfigLink = !!effectiveLink;
   const isEmpty = !hasBackendImage && hasDefaultTitle && !hasConfigLink;
 
   const handleClick = () => {
@@ -446,7 +450,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
               <Clock className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               Under Review
             </>
-          ) : taskConfig?.link ? (
+          ) : effectiveLink ? (
             <>
               <ExternalLink className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               Start Task

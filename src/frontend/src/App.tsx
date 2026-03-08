@@ -15,6 +15,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AIChatBot } from "./components/app/AIChatBot";
 import { AdminAuthGate } from "./components/app/AdminAuthGate";
 import { AuthScreen } from "./components/app/AuthScreen";
 import { BottomNav, type NavTab } from "./components/app/BottomNav";
@@ -982,6 +983,13 @@ export default function App() {
           isAdmin={isAdmin ?? false}
         />
       </div>
+
+      {/* AI Chat Bot — only for authenticated users with profile on non-admin routes */}
+      <AIChatBot
+        actor={
+          actor as unknown as import("./backend.d").backendInterface | null
+        }
+      />
 
       <Toaster
         position="top-center"

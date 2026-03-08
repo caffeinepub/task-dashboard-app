@@ -14,6 +14,7 @@ import type { Principal } from "@icp-sdk/core/principal";
 import {
   AlertCircle,
   ArrowDownToLine,
+  ArrowRightLeft,
   BadgeCheck,
   Building2,
   Check,
@@ -28,6 +29,7 @@ import {
   LogOut,
   Mail,
   Shield,
+  Trophy,
   User,
   Wallet,
   XCircle,
@@ -41,6 +43,7 @@ import {
   useGetCoinBalance,
   useRequestPayment,
   useSaveBankDetails,
+  useTasks,
   useUserPayments,
   useUserSubmissions,
 } from "../hooks/useQueries";
@@ -785,6 +788,7 @@ export function ProfilePage({
   const { data: submissions } = useUserSubmissions(principal);
   const { data: userPayments } = useUserPayments(principal);
   const { data: coinBalance } = useGetCoinBalance(principal);
+  const { data: tasks } = useTasks();
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
@@ -1033,29 +1037,149 @@ export function ProfilePage({
           </motion.div>
         )}
 
-        {/* Withdrawal Request Section */}
+        {/* ── Winning History ──────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.22 }}
         >
-          <h3 className="font-semibold text-foreground text-sm mb-3 px-1">
-            Withdrawals
-          </h3>
-          <div
-            className="glass-card rounded-2xl p-4"
-            style={{ border: "1px solid oklch(0.82 0.18 85 / 0.1)" }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Wallet
-                  className="w-4 h-4"
-                  style={{ color: "oklch(0.82 0.18 85)" }}
-                />
-                <span className="text-sm font-semibold text-foreground">
-                  Request Payout
-                </span>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <Trophy
+              className="w-4 h-4"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+            <h3 className="font-semibold text-foreground text-sm">
+              Winning History
+            </h3>
+          </div>
+
+          {(() => {
+            const approvedSubs = (submissions ?? []).filter(
+              (s) => String(s.status) === "approved",
+            );
+            if (approvedSubs.length === 0) {
+              return (
+                <div
+                  data-ocid="profile.winning.empty_state"
+                  className="glass-card rounded-2xl p-5 text-center"
+                  style={{ border: "1px solid oklch(0.82 0.18 85 / 0.08)" }}
+                >
+                  <Trophy
+                    className="w-8 h-8 mx-auto mb-2 opacity-20"
+                    style={{ color: "oklch(0.82 0.18 85)" }}
+                  />
+                  <p className="text-muted-foreground text-xs font-medium">
+                    No winnings yet
+                  </p>
+                  <p className="text-muted-foreground text-[10px] mt-0.5">
+                    Complete tasks to earn rewards
+                  </p>
+                </div>
+              );
+            }
+            return (
+              <div className="space-y-2">
+                {[...approvedSubs]
+                  .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+                  .map((sub, idx) => {
+                    const taskName =
+                      tasks?.find((t) => t.id === sub.taskId)?.title ??
+                      `Task ${String(sub.taskId)}`;
+                    const reward =
+                      tasks?.find((t) => t.id === sub.taskId)?.reward ??
+                      BigInt(0);
+                    const dateStr = new Date(
+                      Number(sub.createdAt) / 1_000_000,
+                    ).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    });
+                    return (
+                      <motion.div
+                        key={String(sub.id)}
+                        data-ocid={`profile.winning.item.${idx + 1}`}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className="flex items-center gap-3 px-4 py-3 rounded-2xl relative overflow-hidden"
+                        style={{
+                          background: "oklch(0.13 0.03 85 / 0.5)",
+                          border: "1px solid oklch(0.72 0.18 155 / 0.25)",
+                          borderLeft: "3px solid oklch(0.72 0.18 155 / 0.7)",
+                        }}
+                      >
+                        {/* Subtle green glow */}
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{
+                            background:
+                              "radial-gradient(ellipse 50% 80% at 0% 50%, oklch(0.72 0.18 155 / 0.05) 0%, transparent 70%)",
+                          }}
+                        />
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{
+                            background: "oklch(0.72 0.18 155 / 0.12)",
+                            border: "1px solid oklch(0.72 0.18 155 / 0.25)",
+                          }}
+                        >
+                          <Trophy
+                            className="w-4 h-4"
+                            style={{ color: "oklch(0.72 0.18 155)" }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {taskName}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {dateStr}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          {Number(reward) > 0 && (
+                            <span
+                              className="text-sm font-black tabular-nums"
+                              style={{ color: "oklch(0.82 0.18 85)" }}
+                            >
+                              +₹{Number(reward).toLocaleString("en-IN")}
+                            </span>
+                          )}
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: "oklch(0.72 0.18 155 / 0.15)",
+                              color: "oklch(0.72 0.18 155)",
+                              border: "1px solid oklch(0.72 0.18 155 / 0.25)",
+                            }}
+                          >
+                            EARNED
+                          </span>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
               </div>
+            );
+          })()}
+        </motion.div>
+
+        {/* ── Withdrawal Request Section ────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <Wallet
+              className="w-4 h-4"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+            <h3 className="font-semibold text-foreground text-sm">
+              Withdrawal History
+            </h3>
+            <div className="ml-auto">
               <WithdrawalDialog
                 open={withdrawOpen}
                 onOpenChange={setWithdrawOpen}
@@ -1064,133 +1188,167 @@ export function ProfilePage({
                 userPayments={userPayments ?? []}
               />
             </div>
+          </div>
 
-            {/* Withdrawal history */}
-            {userPayments && userPayments.length > 0 ? (
-              <div className="space-y-2 mt-1">
-                {[...userPayments]
-                  .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
-                  .map((payment, idx) => {
-                    const statusStr = String(payment.status);
-                    const statusConfig = {
-                      pending: {
-                        label: "Pending",
-                        color: "oklch(0.82 0.18 85)",
-                        bg: "oklch(0.82 0.18 85 / 0.12)",
-                        Icon: Clock,
-                      },
-                      approved: {
-                        label: "Approved",
-                        color: "oklch(0.72 0.18 155)",
-                        bg: "oklch(0.72 0.18 155 / 0.12)",
-                        Icon: CheckCircle,
-                      },
-                      inPayment: {
-                        label: "In Payment",
-                        color: "oklch(0.75 0.18 195)",
-                        bg: "oklch(0.75 0.18 195 / 0.12)",
-                        Icon: Clock,
-                      },
-                      transferred: {
-                        label: "Transferred",
-                        color: "oklch(0.72 0.18 155)",
-                        bg: "oklch(0.72 0.18 155 / 0.12)",
-                        Icon: CheckCircle,
-                      },
-                      declined: {
-                        label: "Declined",
-                        color: "oklch(var(--destructive))",
-                        bg: "oklch(var(--destructive) / 0.12)",
-                        Icon: XCircle,
-                      },
-                      // backward compat
-                      accepted: {
-                        label: "Approved",
-                        color: "oklch(0.72 0.18 155)",
-                        bg: "oklch(0.72 0.18 155 / 0.12)",
-                        Icon: CheckCircle,
-                      },
-                    };
-                    const cfg =
-                      statusConfig[statusStr as keyof typeof statusConfig] ??
-                      statusConfig.pending;
-                    const dateStr = new Date(
-                      Number(payment.createdAt) / 1_000_000,
-                    ).toLocaleDateString();
-                    return (
-                      <div
-                        key={String(payment.id)}
-                        data-ocid={`profile.withdrawal.item.${idx + 1}`}
-                        className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl"
-                        style={{
-                          background: "oklch(0.12 0.015 265 / 0.6)",
-                          border: "1px solid oklch(0.82 0.18 85 / 0.08)",
-                        }}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ background: cfg.bg }}
-                          >
-                            <cfg.Icon
-                              className="w-3.5 h-3.5"
-                              style={{ color: cfg.color }}
-                            />
-                          </div>
-                          <div className="min-w-0">
+          {/* Withdrawal history — timeline style */}
+          {userPayments && userPayments.length > 0 ? (
+            <div className="space-y-2.5">
+              {[...userPayments]
+                .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+                .map((payment, idx) => {
+                  const statusStr = String(payment.status);
+                  const statusConfig = {
+                    pending: {
+                      label: "Pending",
+                      color: "oklch(0.82 0.18 85)",
+                      bg: "oklch(0.82 0.18 85 / 0.12)",
+                      border: "oklch(0.82 0.18 85 / 0.5)",
+                      Icon: Clock,
+                    },
+                    approved: {
+                      label: "Approved",
+                      color: "oklch(0.72 0.18 155)",
+                      bg: "oklch(0.72 0.18 155 / 0.12)",
+                      border: "oklch(0.72 0.18 155 / 0.5)",
+                      Icon: CheckCircle,
+                    },
+                    inPayment: {
+                      label: "In Payment",
+                      color: "oklch(0.75 0.18 195)",
+                      bg: "oklch(0.75 0.18 195 / 0.12)",
+                      border: "oklch(0.75 0.18 195 / 0.5)",
+                      Icon: ArrowRightLeft,
+                    },
+                    transferred: {
+                      label: "Transferred ✓",
+                      color: "oklch(0.72 0.18 155)",
+                      bg: "oklch(0.72 0.18 155 / 0.12)",
+                      border: "oklch(0.72 0.18 155 / 0.5)",
+                      Icon: CheckCircle,
+                    },
+                    declined: {
+                      label: "Declined",
+                      color: "oklch(0.6 0.22 25)",
+                      bg: "oklch(0.6 0.22 25 / 0.12)",
+                      border: "oklch(0.6 0.22 25 / 0.5)",
+                      Icon: XCircle,
+                    },
+                    accepted: {
+                      label: "Approved",
+                      color: "oklch(0.72 0.18 155)",
+                      bg: "oklch(0.72 0.18 155 / 0.12)",
+                      border: "oklch(0.72 0.18 155 / 0.5)",
+                      Icon: CheckCircle,
+                    },
+                  };
+                  const cfg =
+                    statusConfig[statusStr as keyof typeof statusConfig] ??
+                    statusConfig.pending;
+                  const dateStr = new Date(
+                    Number(payment.createdAt) / 1_000_000,
+                  ).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  });
+                  return (
+                    <motion.div
+                      key={String(payment.id)}
+                      data-ocid={`profile.withdrawal.item.${idx + 1}`}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.04 }}
+                      className="rounded-2xl overflow-hidden"
+                      style={{
+                        background: "oklch(0.12 0.015 265 / 0.7)",
+                        border: "1px solid oklch(0.82 0.18 85 / 0.08)",
+                        borderLeft: `3px solid ${cfg.border}`,
+                      }}
+                    >
+                      <div className="flex items-start gap-3 px-4 py-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                          style={{ background: cfg.bg }}
+                        >
+                          <cfg.Icon
+                            className="w-4 h-4"
+                            style={{ color: cfg.color }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
                             <p
-                              className="text-sm font-bold tabular-nums"
+                              className="text-base font-black tabular-nums leading-tight"
                               style={{ color: "oklch(0.82 0.18 85)" }}
                             >
-                              ₹{Number(payment.amount).toLocaleString("en-IN")}{" "}
+                              ₹{Number(payment.amount).toLocaleString("en-IN")}
                               <span
-                                className="text-xs font-normal"
-                                style={{
-                                  color: "oklch(0.82 0.18 85 / 0.6)",
-                                }}
+                                className="text-xs font-normal ml-1"
+                                style={{ color: "oklch(0.82 0.18 85 / 0.55)" }}
                               >
                                 INR
                               </span>
                             </p>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <p className="text-muted-foreground text-[10px] font-mono">
-                                #{payment.orderId}
-                              </p>
-                              <CopyOrderIdButton orderId={payment.orderId} />
-                            </div>
-                            <p className="text-muted-foreground text-[10px]">
-                              {dateStr}
-                            </p>
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                              style={{
+                                background: cfg.bg,
+                                color: cfg.color,
+                                border: `1px solid ${cfg.border}`,
+                              }}
+                            >
+                              {cfg.label}
+                            </span>
                           </div>
+                          {/* Order ID — prominent with copy */}
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span
+                              className="text-xs font-mono font-semibold"
+                              style={{ color: "oklch(0.75 0.18 195)" }}
+                            >
+                              Order #{payment.orderId}
+                            </span>
+                            <CopyOrderIdButton orderId={payment.orderId} />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {dateStr}
+                          </p>
                         </div>
-                        <span
-                          className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
-                          style={{ background: cfg.bg, color: cfg.color }}
-                        >
-                          {cfg.label}
-                        </span>
                       </div>
-                    );
-                  })}
-              </div>
-            ) : (
-              <div
-                data-ocid="profile.withdrawal.empty_state"
-                className="py-6 text-center"
-              >
-                <CreditCard
-                  className="w-8 h-8 mx-auto mb-2 opacity-25"
-                  style={{ color: "oklch(0.82 0.18 85)" }}
-                />
-                <p className="text-muted-foreground text-xs">
-                  No withdrawal requests yet
-                </p>
-                <p className="text-muted-foreground text-[10px] mt-0.5">
-                  Complete approved tasks to request payouts
-                </p>
-              </div>
-            )}
-          </div>
+                      {/* Contact support hint */}
+                      <div
+                        className="px-4 pb-2.5"
+                        style={{
+                          borderTop: "1px solid oklch(0.82 0.18 85 / 0.05)",
+                        }}
+                      >
+                        <p className="text-[10px] text-muted-foreground pt-2">
+                          Issues? Contact support with Order ID{" "}
+                          <span className="font-mono">#{payment.orderId}</span>
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+            </div>
+          ) : (
+            <div
+              data-ocid="profile.withdrawal.empty_state"
+              className="glass-card rounded-2xl p-6 text-center"
+              style={{ border: "1px solid oklch(0.82 0.18 85 / 0.08)" }}
+            >
+              <CreditCard
+                className="w-8 h-8 mx-auto mb-2 opacity-20"
+                style={{ color: "oklch(0.82 0.18 85)" }}
+              />
+              <p className="text-muted-foreground text-xs font-medium">
+                No withdrawal requests yet
+              </p>
+              <p className="text-muted-foreground text-[10px] mt-0.5">
+                Complete approved tasks to request payouts
+              </p>
+            </div>
+          )}
         </motion.div>
 
         {/* Logout */}

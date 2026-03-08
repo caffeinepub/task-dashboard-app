@@ -1,5 +1,5 @@
 import type { Principal } from "@icp-sdk/core/principal";
-import { Ban, Coins, ShieldAlert } from "lucide-react";
+import { Ban, Coins, ShieldAlert, Sparkles, TrendingUp } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import type { Task, UserProfile } from "../backend.d";
@@ -15,6 +15,7 @@ import {
   useTasks,
   useUserSubmissions,
 } from "../hooks/useQueries";
+import { getTaskLink } from "../lib/taskLinks";
 
 interface HomePageProps {
   profile: UserProfile | null;
@@ -38,10 +39,11 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
     const existingSubmission = getSubmission(task.id);
     if (existingSubmission) return;
 
-    const taskConfig = TASK_CONFIG[index];
-    if (taskConfig?.link) {
+    // Check localStorage first, then TASK_CONFIG fallback
+    const effectiveLink = getTaskLink(index) ?? TASK_CONFIG[index]?.link;
+    if (effectiveLink) {
       // External link tasks: open link + show upload page immediately
-      setTimerTask({ task, link: taskConfig.link });
+      setTimerTask({ task, link: effectiveLink });
     } else {
       setSelectedTask(task);
       setSheetOpen(true);
@@ -90,34 +92,53 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
 
   return (
     <div data-ocid="home.page" className="page-enter">
-      {/* Header */}
+      {/* Header — premium gradient border */}
       <header
-        className="sticky top-0 z-40 px-4 py-3 flex items-center justify-between"
+        className="sticky top-0 z-40 px-4 py-3.5 flex items-center justify-between"
         style={{
-          background: "oklch(0.09 0.01 260 / 0.92)",
-          backdropFilter: "blur(16px)",
-          borderBottom: "1px solid oklch(0.82 0.18 85 / 0.1)",
+          background: "oklch(0.09 0.01 260 / 0.95)",
+          backdropFilter: "blur(20px)",
+          borderBottom: "1px solid oklch(0.82 0.18 85 / 0.18)",
+          boxShadow: "0 1px 0 oklch(0.82 0.18 85 / 0.06)",
         }}
       >
         <div className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+          <motion.div
+            animate={{
+              boxShadow: [
+                "0 0 12px oklch(0.82 0.18 85 / 0.3)",
+                "0 0 22px oklch(0.82 0.18 85 / 0.55)",
+                "0 0 12px oklch(0.82 0.18 85 / 0.3)",
+              ],
+            }}
+            transition={{
+              duration: 3,
+              repeat: Number.POSITIVE_INFINITY,
+              ease: "easeInOut",
+            }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{
-              background: "oklch(0.82 0.18 85 / 0.15)",
-              border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+              background:
+                "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.25), oklch(0.75 0.15 80 / 0.15))",
+              border: "1.5px solid oklch(0.82 0.18 85 / 0.4)",
             }}
           >
             <Coins
-              className="w-4 h-4"
+              className="w-4.5 h-4.5"
               style={{ color: "oklch(0.82 0.18 85)" }}
             />
+          </motion.div>
+          <div>
+            <span
+              className="font-display font-black text-xl tracking-[-0.03em]"
+              style={{
+                color: "oklch(0.82 0.18 85)",
+                letterSpacing: "-0.03em",
+              }}
+            >
+              Dark Coin
+            </span>
           </div>
-          <span
-            className="font-display font-bold text-lg tracking-tight"
-            style={{ color: "oklch(0.82 0.18 85)" }}
-          >
-            Dark Coin
-          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -135,123 +156,138 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
             </span>
           )}
           {profile?.email && (
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+            <motion.div
+              whileTap={{ scale: 0.93 }}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black cursor-pointer"
               style={{
                 background:
                   "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
                 color: "oklch(0.1 0.02 85)",
+                boxShadow: "0 0 12px oklch(0.82 0.18 85 / 0.35)",
               }}
             >
               {displayName.charAt(0).toUpperCase()}
-            </div>
+            </motion.div>
           )}
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="px-4 pt-4 pb-24">
+      <main className="px-4 pt-5 pb-28">
         {/* Welcome section */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.35 }}
           className="mb-5"
         >
-          <h2 className="font-display text-2xl font-bold text-foreground">
-            Welcome back, {displayName} 👋
+          <h2 className="font-display text-2xl font-bold text-foreground leading-tight">
+            Welcome back,{" "}
+            <span style={{ color: "oklch(0.82 0.18 85)" }}>{displayName}</span>{" "}
+            👋
           </h2>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            {tasks && !tasksLoading
-              ? `${tasks.length} tasks available`
-              : "Loading your tasks…"}
+          <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1.5">
+            <TrendingUp
+              className="w-3.5 h-3.5"
+              style={{ color: "oklch(0.72 0.18 155)" }}
+            />
+            Complete tasks to unlock your earning potential
           </p>
         </motion.div>
 
-        {/* Coin Balance Mini Bar */}
+        {/* Coin Balance — prominent radial glow card */}
         <motion.div
           data-ocid="home.coin_balance.card"
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08, duration: 0.3 }}
-          className="mb-4 rounded-2xl px-4 py-3 flex items-center justify-between"
+          transition={{ delay: 0.08, duration: 0.35 }}
+          className="mb-5 rounded-3xl px-5 py-4 relative overflow-hidden"
           style={{
-            background: "oklch(0.13 0.02 85 / 0.7)",
+            background:
+              "linear-gradient(135deg, oklch(0.14 0.04 85 / 0.85), oklch(0.12 0.02 265 / 0.9))",
             border: "1px solid oklch(0.82 0.18 85 / 0.35)",
-            backdropFilter: "blur(12px)",
+            backdropFilter: "blur(16px)",
             boxShadow:
-              "0 0 16px oklch(0.82 0.18 85 / 0.12), inset 0 1px 0 oklch(0.82 0.18 85 / 0.08)",
+              "0 0 28px oklch(0.82 0.18 85 / 0.16), inset 0 1px 0 oklch(0.82 0.18 85 / 0.1)",
           }}
         >
-          <div className="flex items-center gap-2.5">
+          {/* Radial glow background */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(ellipse 70% 60% at 80% 50%, oklch(0.82 0.18 85 / 0.07) 0%, transparent 70%)",
+            }}
+          />
+          <div className="relative z-10 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1 tracking-wide uppercase">
+                Available Balance
+              </p>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="font-display font-black text-3xl tabular-nums leading-none"
+                  style={{ color: "oklch(0.82 0.18 85)" }}
+                >
+                  {coinBalance !== undefined
+                    ? `₹${Number(coinBalance).toLocaleString("en-IN")}`
+                    : "—"}
+                </span>
+                <span
+                  className="text-sm font-bold"
+                  style={{ color: "oklch(0.82 0.18 85 / 0.55)" }}
+                >
+                  INR
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Earned from completed tasks
+              </p>
+            </div>
             <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{
-                background: "oklch(0.82 0.18 85 / 0.18)",
-                border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+                background:
+                  "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.22), oklch(0.75 0.15 80 / 0.16))",
+                border: "1.5px solid oklch(0.82 0.18 85 / 0.35)",
+                boxShadow: "0 0 20px oklch(0.82 0.18 85 / 0.2)",
               }}
             >
               <Coins
-                className="w-4 h-4"
+                className="w-7 h-7"
                 style={{ color: "oklch(0.82 0.18 85)" }}
               />
             </div>
-            <span className="text-sm text-muted-foreground font-medium">
-              Your Balance
-            </span>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span
-              className="font-display font-bold text-xl tabular-nums"
-              style={{ color: "oklch(0.82 0.18 85)" }}
-            >
-              {coinBalance !== undefined
-                ? `₹${Number(coinBalance).toLocaleString("en-IN")}`
-                : "—"}
-            </span>
-            <span
-              className="text-xs font-semibold"
-              style={{ color: "oklch(0.82 0.18 85 / 0.65)" }}
-            >
-              INR
-            </span>
           </div>
         </motion.div>
 
-        {/* Earnings banner */}
+        {/* Active Tasks section header */}
         {!tasksLoading && tasks && tasks.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.3 }}
-            className="mb-5 rounded-2xl p-4 flex items-center gap-3"
-            style={{
-              background:
-                "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.1), oklch(0.75 0.15 80 / 0.06))",
-              border: "1px solid oklch(0.82 0.18 85 / 0.2)",
-            }}
+            transition={{ delay: 0.12, duration: 0.3 }}
+            className="flex items-center gap-2 mb-3"
           >
+            <Sparkles
+              className="w-4 h-4"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+            <h3
+              className="font-display font-bold text-base"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            >
+              Active Tasks
+            </h3>
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+              className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full"
               style={{
-                background: "oklch(0.82 0.18 85 / 0.2)",
+                background: "oklch(0.82 0.18 85 / 0.1)",
+                color: "oklch(0.82 0.18 85 / 0.7)",
+                border: "1px solid oklch(0.82 0.18 85 / 0.15)",
               }}
             >
-              <Coins
-                className="w-5 h-5"
-                style={{ color: "oklch(0.82 0.18 85)" }}
-              />
-            </div>
-            <div>
-              <p
-                className="text-sm font-bold"
-                style={{ color: "oklch(0.82 0.18 85)" }}
-              >
-                Start Earning Today
-              </p>
-              <p className="text-muted-foreground text-xs">
-                Complete tasks below and submit proof to earn rewards
-              </p>
+              {tasks.length} tasks
             </div>
           </motion.div>
         )}
