@@ -1,6 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle, Clock, ImageOff, Play, XCircle } from "lucide-react";
+import {
+  CheckCircle,
+  Clock,
+  ExternalLink,
+  ImageOff,
+  Play,
+  XCircle,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import type { Submission, Task } from "../../backend.d";
@@ -9,6 +16,17 @@ import {
   getStatusLabel,
   toObjectUrl,
 } from "../../hooks/useQueries";
+
+// Task-specific configuration: links and default images per task index (0-based)
+export const TASK_CONFIG: Record<
+  number,
+  { link?: string; defaultImage?: string }
+> = {
+  0: {
+    link: "https://indrummy1.com/?code=R9AEQ7E4346&t=1772949207",
+    defaultImage: "/assets/uploads/file_000000002808720bb614ca6f7dbd0ea8-1.png",
+  },
+};
 
 interface TaskCardProps {
   task: Task;
@@ -50,6 +68,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const colorIdx = index % PLACEHOLDER_COLORS.length;
+  const taskConfig = TASK_CONFIG[index];
 
   useEffect(() => {
     if (task.image && task.image.length > 0) {
@@ -59,7 +78,17 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
         if (url) URL.revokeObjectURL(url);
       };
     }
-  }, [task.image]);
+    if (taskConfig?.defaultImage) {
+      setImageUrl(taskConfig.defaultImage);
+      return;
+    }
+    setImageUrl(null);
+  }, [task.image, taskConfig?.defaultImage]);
+
+  const handleClick = () => {
+    // Always delegate to onStart — for external-link tasks, HomePage shows the timer page
+    onStart(task);
+  };
 
   const status = submission?.status ?? null;
   const hasSubmission = !!submission;
@@ -71,7 +100,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
       className="glass-card rounded-2xl overflow-hidden flex flex-col group cursor-pointer active:scale-[0.98] transition-transform duration-150"
-      onClick={() => onStart(task)}
+      onClick={handleClick}
     >
       {/* Task Image */}
       <div className="relative aspect-[4/3] overflow-hidden">
@@ -130,7 +159,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           data-ocid={`task.start_button.${index + 1}`}
           onClick={(e) => {
             e.stopPropagation();
-            onStart(task);
+            handleClick();
           }}
           size="sm"
           className="w-full rounded-xl h-8 text-xs font-semibold mt-auto transition-all duration-200"
@@ -148,8 +177,17 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
                 }
           }
         >
-          <Play className="w-3 h-3 mr-1.5 fill-current" />
-          {hasSubmission ? "View / Resubmit" : "Start Task"}
+          {taskConfig?.link ? (
+            <>
+              <ExternalLink className="w-3 h-3 mr-1.5" />
+              Start Task
+            </>
+          ) : (
+            <>
+              <Play className="w-3 h-3 mr-1.5 fill-current" />
+              {hasSubmission ? "View / Resubmit" : "Start Task"}
+            </>
+          )}
         </Button>
       </div>
     </motion.div>

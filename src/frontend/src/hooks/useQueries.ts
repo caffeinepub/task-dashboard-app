@@ -107,7 +107,12 @@ export function useUpdateTask() {
       image: Uint8Array | null;
     }) => {
       if (!actor) throw new Error("Not connected");
-      return actor.updateTask(taskId, title, image);
+      // Motoko ?Blob is encoded as undefined (None) or Uint8Array (Some) by the ICP SDK
+      // Do NOT pass null — it must be either a Uint8Array or undefined
+      const imageArg: Uint8Array | undefined =
+        image !== null && image !== undefined ? image : undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return actor.updateTask(taskId, title, imageArg as any);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });

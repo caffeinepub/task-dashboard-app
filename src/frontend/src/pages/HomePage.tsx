@@ -3,8 +3,13 @@ import { Ban, Coins, ShieldAlert } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import type { Task, UserProfile } from "../backend.d";
-import { TaskCard, TaskCardSkeleton } from "../components/app/TaskCard";
+import {
+  TASK_CONFIG,
+  TaskCard,
+  TaskCardSkeleton,
+} from "../components/app/TaskCard";
 import { TaskDetailSheet } from "../components/app/TaskDetailSheet";
+import { TaskTimerPage } from "../components/app/TaskTimerPage";
 import {
   useGetCoinBalance,
   useTasks,
@@ -23,10 +28,20 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
   const { data: coinBalance } = useGetCoinBalance(principal);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [timerTask, setTimerTask] = useState<{
+    task: Task;
+    link: string;
+  } | null>(null);
 
-  const handleStartTask = (task: Task) => {
-    setSelectedTask(task);
-    setSheetOpen(true);
+  const handleStartTask = (task: Task, index: number) => {
+    const taskConfig = TASK_CONFIG[index];
+    if (taskConfig?.link) {
+      // External link tasks: open link + show upload page immediately
+      setTimerTask({ task, link: taskConfig.link });
+    } else {
+      setSelectedTask(task);
+      setSheetOpen(true);
+    }
   };
 
   const handleCloseSheet = () => {
@@ -249,7 +264,7 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
                   task={task}
                   index={i}
                   submission={getSubmission(task.id)}
-                  onStart={handleStartTask}
+                  onStart={(t) => handleStartTask(t, i)}
                 />
               ))}
         </div>
@@ -280,13 +295,22 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
         )}
       </main>
 
-      {/* Task Detail Sheet */}
+      {/* Task Detail Sheet (non-external-link tasks) */}
       <TaskDetailSheet
         task={selectedTask}
         submission={selectedSubmission}
         open={sheetOpen}
         onClose={handleCloseSheet}
       />
+
+      {/* Task Upload Page (external-link tasks — upload available immediately) */}
+      {timerTask && (
+        <TaskTimerPage
+          task={timerTask.task}
+          taskLink={timerTask.link}
+          onClose={() => setTimerTask(null)}
+        />
+      )}
     </div>
   );
 }

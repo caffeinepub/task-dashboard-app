@@ -26,6 +26,7 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { PaymentRequest, Submission, Task } from "../backend.d";
+import { TASK_CONFIG } from "../components/app/TaskCard";
 import { useActor } from "../hooks/useActor";
 import {
   getStatusClass,
@@ -51,21 +52,27 @@ interface AdminPageProps {
 function AdminTaskRow({ task, index }: { task: Task; index: number }) {
   const updateTask = useUpdateTask();
   const [title, setTitle] = useState(task.title);
-  const [startLink, setStartLink] = useState("");
+  const taskConfig = TASK_CONFIG[index];
+  const [startLink, setStartLink] = useState(taskConfig?.link ?? "");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<Uint8Array | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (task.image && task.image.length > 0) {
-      const url = toObjectUrl(task.image);
+    const img = task.image as Uint8Array | undefined;
+    if (img && img.length > 0) {
+      const url = toObjectUrl(img);
       setImageUrl(url);
       return () => {
         if (url) URL.revokeObjectURL(url);
       };
     }
+    if (taskConfig?.defaultImage) {
+      setImageUrl(taskConfig.defaultImage);
+      return;
+    }
     setImageUrl(null);
-  }, [task.image]);
+  }, [task.image, taskConfig?.defaultImage]);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,14 +86,23 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
 
   const handleSave = async () => {
     try {
+      // If no new image was selected, preserve the existing one
+      const existingImage = task.image as Uint8Array | undefined;
+      const imageToSave: Uint8Array | null =
+        pendingImage !== null
+          ? pendingImage
+          : existingImage && existingImage.length > 0
+            ? existingImage
+            : null;
       await updateTask.mutateAsync({
         taskId: task.id,
         title,
-        image: pendingImage,
+        image: imageToSave,
       });
       setPendingImage(null);
       toast.success(`Task ${index + 1} updated`);
-    } catch {
+    } catch (err) {
+      console.error("updateTask error:", err);
       toast.error("Failed to update task");
     }
   };

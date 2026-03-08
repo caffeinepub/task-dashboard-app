@@ -37,38 +37,34 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
       toast.error("Please enter a valid email address");
       return;
     }
-    try {
-      await saveProfile.mutateAsync({
-        email: email.trim(),
-        role: "user",
-        isBlocked: false,
-      });
-      toast.success("Welcome to Dark Coin!");
-      // Show splash screen for 3.5s
-      setShowSplash(true);
-      setTimeout(() => {
-        setShowSplash(false);
-        onProfileSaved();
-      }, 3500);
-    } catch (err) {
-      console.error("Profile save error:", err);
-      // Retry once automatically before showing the error
+
+    const profileData = {
+      email: email.trim(),
+      role: "user",
+      isBlocked: false,
+    };
+
+    // Try up to 3 times with a short delay between attempts
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        await saveProfile.mutateAsync({
-          email: email.trim(),
-          role: "user",
-          isBlocked: false,
-        });
+        await saveProfile.mutateAsync(profileData);
         toast.success("Welcome to Dark Coin!");
         setShowSplash(true);
         setTimeout(() => {
           setShowSplash(false);
           onProfileSaved();
         }, 3500);
-      } catch {
-        toast.error(
-          "Failed to save profile. Please wait a moment and try again.",
-        );
+        return; // success – exit
+      } catch (err) {
+        console.error(`Profile save attempt ${attempt} failed:`, err);
+        if (attempt < 3) {
+          // Wait 1s before retrying
+          await new Promise((r) => setTimeout(r, 1000));
+        } else {
+          toast.error(
+            "Failed to save profile. Please check your connection and try again.",
+          );
+        }
       }
     }
   };
