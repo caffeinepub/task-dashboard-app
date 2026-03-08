@@ -34,6 +34,10 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
   } | null>(null);
 
   const handleStartTask = (task: Task, index: number) => {
+    // Block re-access if user already submitted this task
+    const existingSubmission = getSubmission(task.id);
+    if (existingSubmission) return;
+
     const taskConfig = TASK_CONFIG[index];
     if (taskConfig?.link) {
       // External link tasks: open link + show upload page immediately

@@ -198,7 +198,7 @@ export function TaskDetailSheet({
                     ? "Your submission is under review"
                     : String(submission.status) === "approved"
                       ? "Your submission was approved!"
-                      : "Your submission was declined. You can resubmit."}
+                      : "Your submission was declined."}
                 </p>
               </div>
             </div>
@@ -230,8 +230,8 @@ export function TaskDetailSheet({
             )}
           </AnimatePresence>
 
-          {/* Upload Area */}
-          {!submitSuccess && (
+          {/* Upload Area — blocked if submission already exists */}
+          {!submitSuccess && !submission && (
             <>
               {/* Instructions */}
               <div>

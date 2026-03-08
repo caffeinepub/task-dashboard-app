@@ -86,12 +86,17 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
   }, [task.image, taskConfig?.defaultImage]);
 
   const handleClick = () => {
-    // Always delegate to onStart — for external-link tasks, HomePage shows the timer page
+    // Block interaction if user already submitted this task
+    if (hasSubmission) return;
     onStart(task);
   };
 
   const status = submission?.status ?? null;
   const hasSubmission = !!submission;
+  const statusStr = status ? String(status) : null;
+  const isApproved = statusStr === "approved";
+  const isDeclined = statusStr === "declined";
+  const isPending = statusStr === "pending";
 
   return (
     <motion.div
@@ -99,7 +104,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
-      className="glass-card rounded-2xl overflow-hidden flex flex-col group cursor-pointer active:scale-[0.98] transition-transform duration-150"
+      className={`glass-card rounded-2xl overflow-hidden flex flex-col transition-transform duration-150 ${hasSubmission ? "cursor-default opacity-90" : "group cursor-pointer active:scale-[0.98]"}`}
       onClick={handleClick}
     >
       {/* Task Image */}
@@ -112,13 +117,13 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
             <img
               src={imageUrl}
               alt={task.title}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"} ${hasSubmission ? "brightness-75" : ""}`}
               onLoad={() => setImageLoaded(true)}
             />
           </>
         ) : (
           <div
-            className={`w-full h-full bg-gradient-to-br ${PLACEHOLDER_COLORS[colorIdx]} flex items-center justify-center`}
+            className={`w-full h-full bg-gradient-to-br ${PLACEHOLDER_COLORS[colorIdx]} flex items-center justify-center ${hasSubmission ? "brightness-75" : ""}`}
           >
             <div className="flex flex-col items-center gap-2">
               <ImageOff
@@ -133,20 +138,68 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           </div>
         )}
 
-        {/* Status overlay badge */}
-        {hasSubmission && status && (
+        {/* APPROVED stamp */}
+        {isApproved && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div
+              className="border-4 rounded-lg px-3 py-1.5 rotate-[-15deg] select-none"
+              style={{
+                borderColor: "oklch(0.65 0.18 155)",
+                boxShadow: "0 0 12px oklch(0.65 0.18 155 / 0.5)",
+              }}
+            >
+              <span
+                className="font-display font-black text-lg tracking-widest uppercase"
+                style={{
+                  color: "oklch(0.65 0.18 155)",
+                  textShadow: "0 0 8px oklch(0.65 0.18 155 / 0.7)",
+                }}
+              >
+                APPROVED
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* DECLINED stamp */}
+        {isDeclined && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div
+              className="border-4 rounded-lg px-3 py-1.5 rotate-[-15deg] select-none"
+              style={{
+                borderColor: "oklch(0.55 0.2 25)",
+                boxShadow: "0 0 12px oklch(0.55 0.2 25 / 0.5)",
+              }}
+            >
+              <span
+                className="font-display font-black text-lg tracking-widest uppercase"
+                style={{
+                  color: "oklch(0.65 0.2 25)",
+                  textShadow: "0 0 8px oklch(0.55 0.2 25 / 0.7)",
+                }}
+              >
+                DECLINED
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Pending badge (small, top-right) */}
+        {isPending && (
           <div className="absolute top-2 right-2">
             <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusClass(String(status))}`}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusClass("pending")}`}
             >
-              <StatusIcon status={String(status)} />
-              {getStatusLabel(String(status))}
+              <StatusIcon status="pending" />
+              {getStatusLabel("pending")}
             </span>
           </div>
         )}
 
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+        {/* Hover overlay — only for non-submitted */}
+        {!hasSubmission && (
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+        )}
       </div>
 
       {/* Card Body */}
@@ -161,23 +214,51 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
             e.stopPropagation();
             handleClick();
           }}
+          disabled={hasSubmission}
           size="sm"
-          className="w-full rounded-xl h-8 text-xs font-semibold mt-auto transition-all duration-200"
+          className="w-full rounded-xl h-8 text-xs font-semibold mt-auto transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
           style={
-            hasSubmission && status === "approved"
+            isApproved
               ? {
-                  background: "oklch(var(--success) / 0.15)",
-                  color: "oklch(var(--success))",
-                  border: "1px solid oklch(var(--success) / 0.3)",
+                  background: "oklch(0.55 0.18 155 / 0.15)",
+                  color: "oklch(0.65 0.18 155)",
+                  border: "1px solid oklch(0.55 0.18 155 / 0.3)",
                 }
-              : {
-                  background:
-                    "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.9), oklch(0.75 0.15 80 / 0.9))",
-                  color: "oklch(0.1 0.02 85)",
-                }
+              : isDeclined
+                ? {
+                    background: "oklch(0.55 0.2 25 / 0.15)",
+                    color: "oklch(0.65 0.2 25)",
+                    border: "1px solid oklch(0.55 0.2 25 / 0.3)",
+                  }
+                : isPending
+                  ? {
+                      background: "oklch(0.55 0.18 55 / 0.15)",
+                      color: "oklch(0.72 0.18 55)",
+                      border: "1px solid oklch(0.55 0.18 55 / 0.3)",
+                    }
+                  : {
+                      background:
+                        "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.9), oklch(0.75 0.15 80 / 0.9))",
+                      color: "oklch(0.1 0.02 85)",
+                    }
           }
         >
-          {taskConfig?.link ? (
+          {isApproved ? (
+            <>
+              <CheckCircle className="w-3 h-3 mr-1.5" />
+              Approved
+            </>
+          ) : isDeclined ? (
+            <>
+              <XCircle className="w-3 h-3 mr-1.5" />
+              Declined
+            </>
+          ) : isPending ? (
+            <>
+              <Clock className="w-3 h-3 mr-1.5" />
+              Under Review
+            </>
+          ) : taskConfig?.link ? (
             <>
               <ExternalLink className="w-3 h-3 mr-1.5" />
               Start Task
@@ -185,7 +266,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           ) : (
             <>
               <Play className="w-3 h-3 mr-1.5 fill-current" />
-              {hasSubmission ? "View / Resubmit" : "Start Task"}
+              Start Task
             </>
           )}
         </Button>
