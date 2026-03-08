@@ -4,6 +4,7 @@ import {
   CheckCircle,
   Clock,
   ExternalLink,
+  Lock,
   Play,
   Sparkles,
   XCircle,
@@ -71,8 +72,22 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
     setImageUrl(null);
   }, [task.image, taskConfig?.defaultImage]);
 
+  // Detect "empty" tasks: no backend image, default title pattern, no config link
+  const DEFAULT_TASK_TITLES = [
+    "Task 0",
+    "Task 1",
+    "Task 2",
+    "Task 3",
+    "Task 4",
+    "Task 5",
+  ];
+  const hasBackendImage = !!(task.image && task.image.length > 0);
+  const hasDefaultTitle = DEFAULT_TASK_TITLES.includes(task.title);
+  const hasConfigLink = !!taskConfig?.link;
+  const isEmpty = !hasBackendImage && hasDefaultTitle && !hasConfigLink;
+
   const handleClick = () => {
-    if (hasSubmission) return;
+    if (hasSubmission || isEmpty) return;
     onStart(task);
   };
 
@@ -93,7 +108,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.06, ease: "easeOut" }}
       whileHover={
-        !hasSubmission
+        !hasSubmission && !isEmpty
           ? {
               y: -3,
               transition: { duration: 0.2, ease: "easeOut" },
@@ -101,7 +116,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           : undefined
       }
       className={`group relative rounded-2xl overflow-hidden flex flex-col ${
-        hasSubmission ? "cursor-default" : "cursor-pointer"
+        hasSubmission || isEmpty ? "cursor-default" : "cursor-pointer"
       }`}
       style={{
         background: `linear-gradient(160deg, ${gradient.from}, ${gradient.to})`,
@@ -113,7 +128,7 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
       onClick={handleClick}
     >
       {/* ── Hover glow overlay ── */}
-      {!hasSubmission && (
+      {!hasSubmission && !isEmpty && (
         <div
           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10"
           style={{
@@ -201,8 +216,8 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           </span>
         </div>
 
-        {/* ── Coin reward badge (top-right) — only for unsubmitted tasks ── */}
-        {!hasSubmission && (
+        {/* ── Reward badge (top-right) — only for unsubmitted, non-empty tasks with reward > 0 ── */}
+        {!hasSubmission && !isEmpty && task.reward > BigInt(0) && (
           <div className="absolute top-2 right-2 z-20">
             <span
               className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold"
@@ -214,9 +229,39 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
                 backdropFilter: "blur(8px)",
               }}
             >
-              <Sparkles className="w-2.5 h-2.5" />
-              +10 DC
+              <Sparkles className="w-2.5 h-2.5" />₹
+              {Number(task.reward).toLocaleString("en-IN")}
             </span>
+          </div>
+        )}
+
+        {/* ── Coming Soon overlay for empty tasks ── */}
+        {isEmpty && (
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+            style={{
+              background: "oklch(0.08 0.01 265 / 0.55)",
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            <div
+              className="px-3 py-1.5 rounded-xl select-none flex items-center gap-1.5"
+              style={{
+                background: "oklch(0.15 0.02 265 / 0.85)",
+                border: "1px solid oklch(0.82 0.18 85 / 0.2)",
+              }}
+            >
+              <Lock
+                className="w-3 h-3"
+                style={{ color: "oklch(0.82 0.18 85 / 0.6)" }}
+              />
+              <span
+                className="font-display font-bold text-xs tracking-wider uppercase"
+                style={{ color: "oklch(0.82 0.18 85 / 0.65)" }}
+              >
+                Coming Soon
+              </span>
+            </div>
           </div>
         )}
 
@@ -316,12 +361,12 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
           >
             {task.title}
           </p>
-          {!hasSubmission && (
+          {!hasSubmission && !isEmpty && (
             <p
               className="text-[10px] mt-0.5 font-medium"
               style={{ color: "oklch(0.82 0.18 85 / 0.55)" }}
             >
-              Earn Dark Coin rewards
+              Earn ₹ rewards
             </p>
           )}
         </div>
@@ -333,38 +378,44 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
             e.stopPropagation();
             handleClick();
           }}
-          disabled={hasSubmission}
+          disabled={hasSubmission || isEmpty}
           size="sm"
           className="w-full rounded-xl h-9 text-xs font-bold mt-auto transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed relative overflow-hidden"
           style={
-            isApproved
+            isEmpty
               ? {
-                  background: "oklch(0.55 0.18 155 / 0.18)",
-                  color: "oklch(0.72 0.18 155)",
-                  border: "1px solid oklch(0.55 0.18 155 / 0.4)",
+                  background: "oklch(0.15 0.02 265 / 0.6)",
+                  color: "oklch(0.82 0.18 85 / 0.4)",
+                  border: "1px solid oklch(0.82 0.18 85 / 0.1)",
                 }
-              : isDeclined
+              : isApproved
                 ? {
-                    background: "oklch(0.55 0.2 25 / 0.18)",
-                    color: "oklch(0.65 0.2 25)",
-                    border: "1px solid oklch(0.55 0.2 25 / 0.4)",
+                    background: "oklch(0.55 0.18 155 / 0.18)",
+                    color: "oklch(0.72 0.18 155)",
+                    border: "1px solid oklch(0.55 0.18 155 / 0.4)",
                   }
-                : isPending
+                : isDeclined
                   ? {
-                      background: "oklch(0.82 0.18 85 / 0.1)",
-                      color: "oklch(0.82 0.18 85 / 0.7)",
-                      border: "1px solid oklch(0.82 0.18 85 / 0.2)",
+                      background: "oklch(0.55 0.2 25 / 0.18)",
+                      color: "oklch(0.65 0.2 25)",
+                      border: "1px solid oklch(0.55 0.2 25 / 0.4)",
                     }
-                  : {
-                      background:
-                        "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.78 0.17 82))",
-                      color: "oklch(0.1 0.02 85)",
-                      boxShadow: "0 0 16px oklch(0.82 0.18 85 / 0.35)",
-                    }
+                  : isPending
+                    ? {
+                        background: "oklch(0.82 0.18 85 / 0.1)",
+                        color: "oklch(0.82 0.18 85 / 0.7)",
+                        border: "1px solid oklch(0.82 0.18 85 / 0.2)",
+                      }
+                    : {
+                        background:
+                          "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.78 0.17 82))",
+                        color: "oklch(0.1 0.02 85)",
+                        boxShadow: "0 0 16px oklch(0.82 0.18 85 / 0.35)",
+                      }
           }
         >
           {/* Shimmer effect on hover for active CTA */}
-          {!hasSubmission && (
+          {!hasSubmission && !isEmpty && (
             <div
               className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
               style={{
@@ -375,7 +426,12 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
               }}
             />
           )}
-          {isApproved ? (
+          {isEmpty ? (
+            <>
+              <Lock className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
+              Coming Soon
+            </>
+          ) : isApproved ? (
             <>
               <CheckCircle className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
               Approved

@@ -22,6 +22,7 @@ import {
   Clock,
   Coins,
   CreditCard,
+  IndianRupee,
   Loader2,
   Lock,
   LogOut,
@@ -68,6 +69,12 @@ function maskAccount(account: string): string {
   return "●".repeat(account.length - 4) + account.slice(-4);
 }
 
+// ── Fixed withdrawal tier amounts (INR) ───────────────────────────────────
+
+const WITHDRAWAL_TIERS = [
+  10, 30, 50, 100, 150, 500, 750, 1200, 3000, 5000, 10000,
+];
+
 // ── Withdrawal Dialog ──────────────────────────────────────────────────────
 
 function WithdrawalDialog({
@@ -93,8 +100,8 @@ function WithdrawalDialog({
   const saveBankDetails = useSaveBankDetails();
   const requestPayment = useRequestPayment();
 
-  // Step state: 1 = IFSC, 2 = Account number
-  const [step, setStep] = useState<1 | 2>(1);
+  // Step state: 1 = IFSC, 2 = Account number, 3 = Amount selection
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // IFSC step
   const [ifscCode, setIfscCode] = useState("");
@@ -108,10 +115,13 @@ function WithdrawalDialog({
   const [confirmAccountNumber, setConfirmAccountNumber] = useState("");
   const [accountError, setAccountError] = useState<string | null>(null);
 
+  // Amount selection
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+
   const hasBankDetails = !!profile?.bankDetails;
   const balance = Number(coinBalance);
-  const hasPendingWithdrawal = userPayments.some(
-    (p) => String(p.status) === "pending",
+  const hasPendingWithdrawal = userPayments.some((p) =>
+    ["pending", "approved", "inPayment"].includes(String(p.status)),
   );
 
   const resetState = () => {
@@ -124,6 +134,7 @@ function WithdrawalDialog({
     setAccountNumber("");
     setConfirmAccountNumber("");
     setAccountError(null);
+    setSelectedAmount(null);
   };
 
   const handleOpenChange = (v: boolean) => {
@@ -158,7 +169,7 @@ function WithdrawalDialog({
     }
   };
 
-  const handleSaveBankAndWithdraw = async () => {
+  const handleSaveBankDetails = async () => {
     setAccountError(null);
     if (!accountNumber.trim() || accountNumber.trim().length < 9) {
       setAccountError("Account number must be at least 9 digits");
@@ -174,21 +185,19 @@ function WithdrawalDialog({
     }
     if (!bankInfo) return;
 
-    let bankSaved = false;
     try {
       await saveBankDetails.mutateAsync({
         ifscCode: ifscCode.trim().toUpperCase(),
         bankName: bankInfo.BANK,
         accountNumber: accountNumber.trim(),
       });
-      bankSaved = true;
+      setStep(3);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // If bank details were already saved previously, proceed to payment
       if (msg.toLowerCase().includes("already")) {
-        bankSaved = true;
+        // Already saved, proceed to amount selection
+        setStep(3);
       } else {
-        // Show specific error message from backend
         const displayMsg = msg.includes(":")
           ? msg.split(":").slice(-1)[0].trim()
           : msg;
@@ -197,15 +206,14 @@ function WithdrawalDialog({
             ? `Bank save failed: ${displayMsg}`
             : "Failed to save bank details. Please try again.",
         );
-        return;
       }
     }
+  };
 
-    if (!bankSaved) return;
-
-    // Now request payment
+  const handleRequestWithdrawal = async () => {
+    if (!selectedAmount) return;
     try {
-      await requestPayment.mutateAsync(coinBalance);
+      await requestPayment.mutateAsync(BigInt(selectedAmount));
       toast.success("Withdrawal request submitted! Pending admin review.");
       handleOpenChange(false);
     } catch (err) {
@@ -220,8 +228,9 @@ function WithdrawalDialog({
   };
 
   const handleDirectWithdraw = async () => {
+    if (!selectedAmount) return;
     try {
-      await requestPayment.mutateAsync(coinBalance);
+      await requestPayment.mutateAsync(BigInt(selectedAmount));
       toast.success("Withdrawal request submitted! Pending admin review.");
       handleOpenChange(false);
     } catch (err) {
@@ -232,6 +241,115 @@ function WithdrawalDialog({
   };
 
   const canWithdraw = balance > 0 && !hasPendingWithdrawal;
+
+  // Amount tier grid component (shared between new-bank and existing-bank flows)
+  const AmountTierGrid = () => (
+    <div className="space-y-3">
+      <div
+        className="flex items-center justify-between px-4 py-3 rounded-2xl"
+        style={{
+          background: "oklch(0.82 0.18 85 / 0.08)",
+          border: "1px solid oklch(0.82 0.18 85 / 0.15)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <IndianRupee
+            className="w-4 h-4"
+            style={{ color: "oklch(0.82 0.18 85)" }}
+          />
+          <span className="text-sm text-muted-foreground">Available</span>
+        </div>
+        <span
+          className="font-display font-bold text-lg tabular-nums"
+          style={{ color: "oklch(0.82 0.18 85)" }}
+        >
+          ₹{balance.toLocaleString("en-IN")}
+        </span>
+      </div>
+
+      {hasPendingWithdrawal && (
+        <div
+          className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+          style={{
+            background: "oklch(0.82 0.18 85 / 0.08)",
+            border: "1px solid oklch(0.82 0.18 85 / 0.2)",
+          }}
+        >
+          <Clock
+            className="w-4 h-4 flex-shrink-0"
+            style={{ color: "oklch(0.82 0.18 85)" }}
+          />
+          <p className="text-xs" style={{ color: "oklch(0.82 0.18 85)" }}>
+            You have a pending withdrawal request
+          </p>
+        </div>
+      )}
+
+      {balance === 0 && (
+        <div
+          className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+          style={{
+            background: "oklch(var(--destructive) / 0.08)",
+            border: "1px solid oklch(var(--destructive) / 0.2)",
+          }}
+        >
+          <AlertCircle className="w-4 h-4 flex-shrink-0 text-destructive" />
+          <p className="text-xs text-destructive">No balance to withdraw</p>
+        </div>
+      )}
+
+      <div>
+        <p className="text-xs text-muted-foreground mb-2 px-0.5">
+          Select withdrawal amount
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {WITHDRAWAL_TIERS.map((tier) => {
+            const isDisabled = tier > balance || hasPendingWithdrawal;
+            const isSelected = selectedAmount === tier;
+            return (
+              <button
+                key={tier}
+                type="button"
+                data-ocid={`profile.withdrawal.tier_${tier}.button`}
+                onClick={() => !isDisabled && setSelectedAmount(tier)}
+                disabled={isDisabled}
+                className="rounded-xl py-2.5 text-xs font-bold transition-all duration-150 relative overflow-hidden"
+                style={
+                  isSelected
+                    ? {
+                        background:
+                          "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+                        color: "oklch(0.1 0.02 85)",
+                        border: "1px solid oklch(0.82 0.18 85)",
+                        boxShadow: "0 0 12px oklch(0.82 0.18 85 / 0.4)",
+                      }
+                    : isDisabled
+                      ? {
+                          background: "oklch(0.14 0.015 265 / 0.5)",
+                          color: "oklch(0.5 0.03 265)",
+                          border: "1px solid oklch(0.25 0.02 265 / 0.4)",
+                          cursor: "not-allowed",
+                        }
+                      : {
+                          background: "oklch(0.16 0.02 265 / 0.8)",
+                          color: "oklch(0.82 0.18 85 / 0.85)",
+                          border: "1px solid oklch(0.82 0.18 85 / 0.15)",
+                        }
+                }
+              >
+                ₹{tier.toLocaleString("en-IN")}
+              </button>
+            );
+          })}
+        </div>
+        {!selectedAmount && canWithdraw && (
+          <p className="text-[11px] text-muted-foreground text-center mt-2">
+            Select an amount to withdraw
+          </p>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -265,63 +383,7 @@ function WithdrawalDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Balance display */}
-        <div
-          className="flex items-center justify-between px-4 py-3 rounded-2xl"
-          style={{
-            background: "oklch(0.82 0.18 85 / 0.08)",
-            border: "1px solid oklch(0.82 0.18 85 / 0.15)",
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Coins
-              className="w-4 h-4"
-              style={{ color: "oklch(0.82 0.18 85)" }}
-            />
-            <span className="text-sm text-muted-foreground">
-              Available Balance
-            </span>
-          </div>
-          <span
-            className="font-display font-bold text-lg tabular-nums"
-            style={{ color: "oklch(0.82 0.18 85)" }}
-          >
-            {balance.toLocaleString()} DC
-          </span>
-        </div>
-
-        {hasPendingWithdrawal && (
-          <div
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-            style={{
-              background: "oklch(0.82 0.18 85 / 0.08)",
-              border: "1px solid oklch(0.82 0.18 85 / 0.2)",
-            }}
-          >
-            <Clock
-              className="w-4 h-4 flex-shrink-0"
-              style={{ color: "oklch(0.82 0.18 85)" }}
-            />
-            <p className="text-xs" style={{ color: "oklch(0.82 0.18 85)" }}>
-              You have a pending withdrawal request
-            </p>
-          </div>
-        )}
-
-        {balance === 0 && (
-          <div
-            className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-            style={{
-              background: "oklch(var(--destructive) / 0.08)",
-              border: "1px solid oklch(var(--destructive) / 0.2)",
-            }}
-          >
-            <AlertCircle className="w-4 h-4 flex-shrink-0 text-destructive" />
-            <p className="text-xs text-destructive">No balance to withdraw</p>
-          </div>
-        )}
-
-        {/* ── Has bank details → direct withdraw ── */}
+        {/* ── Has bank details → amount tier selection ── */}
         {hasBankDetails && profile?.bankDetails && (
           <div className="space-y-3 py-1">
             <div
@@ -365,10 +427,12 @@ function WithdrawalDialog({
                 Bank details are permanent. Contact admin to change.
               </p>
             </div>
+
+            <AmountTierGrid />
           </div>
         )}
 
-        {/* ── No bank details → 2-step form ── */}
+        {/* ── No bank details → 3-step form: IFSC → Account → Amount ── */}
         {!hasBankDetails && (
           <div className="space-y-4 py-1">
             {step === 1 && (
@@ -560,11 +624,9 @@ function WithdrawalDialog({
                   </Button>
                   <Button
                     data-ocid="profile.withdrawal.save_bank_button"
-                    onClick={handleSaveBankAndWithdraw}
+                    onClick={handleSaveBankDetails}
                     disabled={
-                      !canWithdraw ||
                       saveBankDetails.isPending ||
-                      requestPayment.isPending ||
                       accountNumber.length < 9 ||
                       accountNumber !== confirmAccountNumber
                     }
@@ -575,15 +637,17 @@ function WithdrawalDialog({
                       color: "oklch(0.1 0.02 85)",
                     }}
                   >
-                    {saveBankDetails.isPending || requestPayment.isPending ? (
+                    {saveBankDetails.isPending ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      "Save & Withdraw"
+                      "Save Bank Details"
                     )}
                   </Button>
                 </div>
               </div>
             )}
+
+            {step === 3 && <AmountTierGrid />}
           </div>
         )}
 
@@ -601,13 +665,19 @@ function WithdrawalDialog({
             <Button
               data-ocid="profile.withdrawal.request_button"
               onClick={handleDirectWithdraw}
-              disabled={!canWithdraw || requestPayment.isPending}
+              disabled={
+                !canWithdraw || !selectedAmount || requestPayment.isPending
+              }
               className="rounded-xl btn-glow"
               style={{
-                background: canWithdraw
-                  ? "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))"
-                  : undefined,
-                color: canWithdraw ? "oklch(0.1 0.02 85)" : undefined,
+                background:
+                  canWithdraw && selectedAmount
+                    ? "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))"
+                    : undefined,
+                color:
+                  canWithdraw && selectedAmount
+                    ? "oklch(0.1 0.02 85)"
+                    : undefined,
               }}
             >
               {requestPayment.isPending ? (
@@ -615,6 +685,50 @@ function WithdrawalDialog({
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Submitting…
                 </>
+              ) : selectedAmount ? (
+                `Withdraw ₹${selectedAmount.toLocaleString("en-IN")}`
+              ) : (
+                "Request Withdrawal"
+              )}
+            </Button>
+          </DialogFooter>
+        )}
+
+        {/* Footer for new bank details step 3 */}
+        {!hasBankDetails && step === 3 && (
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setStep(2)}
+              className="rounded-xl border-border/50"
+            >
+              Back
+            </Button>
+            <Button
+              data-ocid="profile.withdrawal.request_button"
+              onClick={handleRequestWithdrawal}
+              disabled={
+                !canWithdraw || !selectedAmount || requestPayment.isPending
+              }
+              className="rounded-xl btn-glow"
+              style={{
+                background:
+                  canWithdraw && selectedAmount
+                    ? "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))"
+                    : undefined,
+                color:
+                  canWithdraw && selectedAmount
+                    ? "oklch(0.1 0.02 85)"
+                    : undefined,
+              }}
+            >
+              {requestPayment.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Submitting…
+                </>
+              ) : selectedAmount ? (
+                `Withdraw ₹${selectedAmount.toLocaleString("en-IN")}`
               ) : (
                 "Request Withdrawal"
               )}
@@ -965,8 +1079,20 @@ export function ProfilePage({
                         bg: "oklch(0.82 0.18 85 / 0.12)",
                         Icon: Clock,
                       },
-                      accepted: {
-                        label: "Accepted",
+                      approved: {
+                        label: "Approved",
+                        color: "oklch(0.72 0.18 155)",
+                        bg: "oklch(0.72 0.18 155 / 0.12)",
+                        Icon: CheckCircle,
+                      },
+                      inPayment: {
+                        label: "In Payment",
+                        color: "oklch(0.75 0.18 195)",
+                        bg: "oklch(0.75 0.18 195 / 0.12)",
+                        Icon: Clock,
+                      },
+                      transferred: {
+                        label: "Transferred",
                         color: "oklch(0.72 0.18 155)",
                         bg: "oklch(0.72 0.18 155 / 0.12)",
                         Icon: CheckCircle,
@@ -976,6 +1102,13 @@ export function ProfilePage({
                         color: "oklch(var(--destructive))",
                         bg: "oklch(var(--destructive) / 0.12)",
                         Icon: XCircle,
+                      },
+                      // backward compat
+                      accepted: {
+                        label: "Approved",
+                        color: "oklch(0.72 0.18 155)",
+                        bg: "oklch(0.72 0.18 155 / 0.12)",
+                        Icon: CheckCircle,
                       },
                     };
                     const cfg =
@@ -1009,14 +1142,14 @@ export function ProfilePage({
                               className="text-sm font-bold tabular-nums"
                               style={{ color: "oklch(0.82 0.18 85)" }}
                             >
-                              {Number(payment.amount).toLocaleString()}{" "}
+                              ₹{Number(payment.amount).toLocaleString("en-IN")}{" "}
                               <span
                                 className="text-xs font-normal"
                                 style={{
                                   color: "oklch(0.82 0.18 85 / 0.6)",
                                 }}
                               >
-                                DC
+                                INR
                               </span>
                             </p>
                             <div className="flex items-center gap-1 mt-0.5">

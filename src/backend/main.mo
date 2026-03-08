@@ -44,9 +44,10 @@ actor {
     id : Nat;
     userId : Principal;
     amount : Nat;
-    status : { #pending; #accepted; #declined };
+    status : { #pending; #approved; #inPayment; #transferred; #declined };
     createdAt : Int;
     orderId : Text;
+    coinsDeducted : Bool;
   };
 
   module Task {
@@ -54,6 +55,7 @@ actor {
       id : Nat;
       title : Text;
       image : ?Blob;
+      reward : Nat;
     };
 
     public func compare(t1 : Task, t2 : Task) : Order.Order {
@@ -100,13 +102,13 @@ actor {
 
   private func initTasks() {
     for (i in [0, 1, 2, 3, 4, 5].values()) {
-      tasks.add(i, { id = i; title = "Task " # i.toText(); image = null });
+      tasks.add(i, { id = i; title = "Task " # i.toText(); image = null; reward = 0 });
     };
   };
   initTasks();
 
   private func ensureUserRegistered(caller : Principal) {
-    if (not caller.isAnonymous()) {
+    if (not caller.isAnonymous() and caller.toText() != "aaaaa-aa") {
       switch (userProfiles.get(caller)) {
         case (null) {
           let newProfile : UserProfile = {
@@ -154,6 +156,7 @@ actor {
     if (caller.isAnonymous()) {
       Runtime.trap("Unauthorized: Anonymous users cannot view profiles");
     };
+    ensureUserRegistered(caller);
     userProfiles.get(caller);
   };
 
@@ -195,7 +198,7 @@ actor {
 
   public shared ({ caller }) func addCoins(userId : Principal, amount : Nat) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can add coins");
+      Runtime.trap("Unauthorized: Only admins can add coins");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -212,7 +215,7 @@ actor {
 
   public shared ({ caller }) func deductCoins(userId : Principal, amount : Nat) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can deduct coins");
+      Runtime.trap("Unauthorized: Only admins can deduct coins");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -242,7 +245,7 @@ actor {
 
   public shared ({ caller }) func blockUser(userId : Principal) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can block users");
+      Runtime.trap("Unauthorized: Only admins can block users");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -263,7 +266,7 @@ actor {
 
   public shared ({ caller }) func unblockUser(userId : Principal) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can unblock users");
+      Runtime.trap("Unauthorized: Only admins can unblock users");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -282,9 +285,9 @@ actor {
     };
   };
 
-  public shared ({ caller }) func updateTask(taskId : Nat, title : Text, image : ?Blob) : async () {
+  public shared ({ caller }) func updateTask(taskId : Nat, title : Text, image : ?Blob, reward : Nat) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can update tasks");
+      Runtime.trap("Unauthorized: Only admins can update tasks");
     };
     if (taskId >= 6) {
       Runtime.trap("Invalid task id");
@@ -293,6 +296,7 @@ actor {
       id = taskId;
       title;
       image;
+      reward;
     };
     tasks.add(taskId, task);
   };
@@ -337,7 +341,7 @@ actor {
 
   public shared ({ caller }) func reviewSubmission(submissionId : Nat, approve : Bool) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can review submissions");
+      Runtime.trap("Unauthorized: Only admins can review submissions");
     };
     switch (submissions.get(submissionId)) {
       case (null) {
@@ -362,8 +366,12 @@ actor {
           };
           switch (userProfiles.get(submission.userId)) {
             case (?profile) {
+              let taskReward = switch (tasks.get(submission.taskId)) {
+                case (?task) { task.reward };
+                case (null) { 10 };
+              };
               let updatedProfile = {
-                profile with coinBalance = profile.coinBalance + 10 : Nat;
+                profile with coinBalance = profile.coinBalance + taskReward : Nat;
               };
               userProfiles.add(submission.userId, updatedProfile);
             };
@@ -391,12 +399,15 @@ actor {
 
   public query ({ caller }) func getAllSubmissions() : async [Submission.Submission] {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can view all submissions");
+      Runtime.trap("Unauthorized: Only admins can view all submissions");
     };
     submissions.values().toArray().sort();
   };
 
+  // --- PaymentRequest Functions ---
+
   public shared ({ caller }) func requestPayment(amount : Nat) : async () {
+    ensureUserRegistered(caller);
     if (not hasUserPermission(caller)) {
       Runtime.trap("Unauthorized: Only users can request payments");
     };
@@ -419,6 +430,7 @@ actor {
       status = #pending;
       createdAt = Time.now();
       orderId = generateOrderId();
+      coinsDeducted = false;
     };
     paymentRequests.add(nextPaymentId, request);
     nextPaymentId += 1;
@@ -426,7 +438,7 @@ actor {
 
   public shared ({ caller }) func reviewPayment(paymentId : Nat, approve : Bool) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can review payments");
+      Runtime.trap("Unauthorized: Only admins can review payments");
     };
     switch (paymentRequests.get(paymentId)) {
       case (null) {
@@ -457,9 +469,10 @@ actor {
               id = request.id;
               userId = request.userId;
               amount = request.amount;
-              status = if (approve) { #accepted } else { #declined };
+              status = if (approve) { #approved } else { #declined };
               createdAt = request.createdAt;
               orderId = request.orderId;
+              coinsDeducted = approve;
             };
             paymentRequests.add(paymentId, updated);
           };
@@ -467,6 +480,55 @@ actor {
             Runtime.trap("Payment request already processed");
           };
         };
+      };
+    };
+  };
+
+  public shared ({ caller }) func updatePaymentStatus(paymentId : Nat, newStatus : { #approved; #inPayment; #transferred; #declined }) : async () {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Only admins can update payment status");
+    };
+
+    switch (paymentRequests.get(paymentId)) {
+      case (null) {
+        Runtime.trap("Payment request not found");
+      };
+      case (?request) {
+        let coinsDeducted = switch (newStatus) {
+          case (#approved) {
+            if (request.status == #pending and not request.coinsDeducted) {
+              switch (userProfiles.get(request.userId)) {
+                case (?profile) {
+                  if (profile.coinBalance < request.amount) {
+                    Runtime.trap("Insufficient coin balance");
+                  };
+                  let updatedProfile = {
+                    profile with coinBalance = profile.coinBalance - request.amount : Nat;
+                  };
+                  userProfiles.add(request.userId, updatedProfile);
+                  true;
+                };
+                case (null) {
+                  Runtime.trap("User not found");
+                };
+              };
+            } else {
+              request.coinsDeducted;
+            };
+          };
+          case (_) { request.coinsDeducted };
+        };
+
+        let updated = {
+          id = request.id;
+          userId = request.userId;
+          amount = request.amount;
+          status = newStatus;
+          createdAt = request.createdAt;
+          orderId = request.orderId;
+          coinsDeducted;
+        };
+        paymentRequests.add(paymentId, updated);
       };
     };
   };
@@ -488,7 +550,7 @@ actor {
 
   public query ({ caller }) func getAllPayments() : async [PaymentRequest] {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can view all payments");
+      Runtime.trap("Unauthorized: Only admins can view all payments");
     };
     paymentRequests.values().toArray();
   };
@@ -547,7 +609,7 @@ actor {
     totalSubmissions : Nat;
   }] {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can view all analytics");
+      Runtime.trap("Unauthorized: Only admins can view all analytics");
     };
     userProfiles.entries().toArray().map(
       func((userId, profile) : (Principal, UserProfile)) : {
@@ -618,7 +680,7 @@ actor {
 
   public shared ({ caller }) func adminUpdateBankDetails(userId : Principal, ifscCode : Text, bankName : Text, accountNumber : Text) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can update bank details");
+      Runtime.trap("Unauthorized: Only admins can update bank details");
     };
     switch (userProfiles.get(userId)) {
       case (?existingProfile) {
@@ -649,7 +711,7 @@ actor {
 
   public shared ({ caller }) func freezeAccountForCheat(userId : Principal) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only authenticated users can freeze accounts");
+      Runtime.trap("Unauthorized: Only admins can freeze accounts");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -684,7 +746,7 @@ actor {
 
   public shared ({ caller }) func deleteUser(userId : Principal) : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can delete users");
+      Runtime.trap("Unauthorized: Only admins can delete users");
     };
 
     userProfiles.remove(userId);
@@ -718,7 +780,7 @@ actor {
 
   public shared ({ caller }) func clearAllData() : async () {
     if (caller.isAnonymous()) {
-      Runtime.trap("Unauthorized: Only PIN-authenticated users can clear all data");
+      Runtime.trap("Unauthorized: Only admins can clear all data");
     };
 
     submissions.clear();

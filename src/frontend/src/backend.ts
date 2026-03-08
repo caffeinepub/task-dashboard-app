@@ -100,16 +100,18 @@ export interface _CaffeineStorageRefillInformation {
 }
 export interface Task {
     id: bigint;
+    reward: bigint;
     title: string;
     image?: Blob;
 }
 export interface PaymentRequest {
     id: bigint;
-    status: Variant_pending_accepted_declined;
+    status: Variant_pending_transferred_approved_declined_inPayment;
     userId: Principal;
     createdAt: bigint;
     orderId: string;
     amount: bigint;
+    coinsDeducted: boolean;
 }
 export interface _CaffeineStorageCreateCertificateResult {
     method: string;
@@ -144,10 +146,18 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
-export enum Variant_pending_accepted_declined {
+export enum Variant_pending_transferred_approved_declined_inPayment {
     pending = "pending",
-    accepted = "accepted",
-    declined = "declined"
+    transferred = "transferred",
+    approved = "approved",
+    declined = "declined",
+    inPayment = "inPayment"
+}
+export enum Variant_transferred_approved_declined_inPayment {
+    transferred = "transferred",
+    approved = "approved",
+    declined = "declined",
+    inPayment = "inPayment"
 }
 export interface backendInterface {
     _caffeineStorageBlobIsLive(hash: Uint8Array): Promise<boolean>;
@@ -201,7 +211,8 @@ export interface backendInterface {
     }): Promise<void>;
     submitTask(taskId: bigint, file: Blob): Promise<void>;
     unblockUser(userId: Principal): Promise<void>;
-    updateTask(taskId: bigint, title: string, image: Blob | null): Promise<void>;
+    updatePaymentStatus(paymentId: bigint, newStatus: Variant_transferred_approved_declined_inPayment): Promise<void>;
+    updateTask(taskId: bigint, title: string, image: Blob | null, reward: bigint): Promise<void>;
 }
 import type { BankDetails as _BankDetails, Blob as _Blob, PaymentRequest as _PaymentRequest, Submission as _Submission, Task as _Task, TaskStatus as _TaskStatus, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -738,17 +749,31 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateTask(arg0: bigint, arg1: string, arg2: Blob | null): Promise<void> {
+    async updatePaymentStatus(arg0: bigint, arg1: Variant_transferred_approved_declined_inPayment): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.updateTask(arg0, arg1, to_candid_opt_n33(this._uploadFile, this._downloadFile, arg2));
+                const result = await this.actor.updatePaymentStatus(arg0, to_candid_variant_n33(this._uploadFile, this._downloadFile, arg1));
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.updateTask(arg0, arg1, to_candid_opt_n33(this._uploadFile, this._downloadFile, arg2));
+            const result = await this.actor.updatePaymentStatus(arg0, to_candid_variant_n33(this._uploadFile, this._downloadFile, arg1));
+            return result;
+        }
+    }
+    async updateTask(arg0: bigint, arg1: string, arg2: Blob | null, arg3: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateTask(arg0, arg1, to_candid_opt_n34(this._uploadFile, this._downloadFile, arg2), arg3);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateTask(arg0, arg1, to_candid_opt_n34(this._uploadFile, this._downloadFile, arg2), arg3);
             return result;
         }
     }
@@ -797,21 +822,27 @@ function from_candid_record_n12(_uploadFile: (file: ExternalBlob) => Promise<Uin
     status: {
         pending: null;
     } | {
-        accepted: null;
+        transferred: null;
+    } | {
+        approved: null;
     } | {
         declined: null;
+    } | {
+        inPayment: null;
     };
     userId: Principal;
     createdAt: bigint;
     orderId: string;
     amount: bigint;
+    coinsDeducted: boolean;
 }): {
     id: bigint;
-    status: Variant_pending_accepted_declined;
+    status: Variant_pending_transferred_approved_declined_inPayment;
     userId: Principal;
     createdAt: bigint;
     orderId: string;
     amount: bigint;
+    coinsDeducted: boolean;
 } {
     return {
         id: value.id,
@@ -819,7 +850,8 @@ function from_candid_record_n12(_uploadFile: (file: ExternalBlob) => Promise<Uin
         userId: value.userId,
         createdAt: value.createdAt,
         orderId: value.orderId,
-        amount: value.amount
+        amount: value.amount,
+        coinsDeducted: value.coinsDeducted
     };
 }
 function from_candid_record_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -890,15 +922,18 @@ function from_candid_record_n25(_uploadFile: (file: ExternalBlob) => Promise<Uin
 }
 function from_candid_record_n30(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: bigint;
+    reward: bigint;
     title: string;
     image: [] | [_Blob];
 }): {
     id: bigint;
+    reward: bigint;
     title: string;
     image?: Blob;
 } {
     return {
         id: value.id,
+        reward: value.reward,
         title: value.title,
         image: record_opt_to_undefined(from_candid_opt_n31(_uploadFile, _downloadFile, value.image))
     };
@@ -933,11 +968,15 @@ function from_candid_record_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint
 function from_candid_variant_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     pending: null;
 } | {
-    accepted: null;
+    transferred: null;
+} | {
+    approved: null;
 } | {
     declined: null;
-}): Variant_pending_accepted_declined {
-    return "pending" in value ? Variant_pending_accepted_declined.pending : "accepted" in value ? Variant_pending_accepted_declined.accepted : "declined" in value ? Variant_pending_accepted_declined.declined : value;
+} | {
+    inPayment: null;
+}): Variant_pending_transferred_approved_declined_inPayment {
+    return "pending" in value ? Variant_pending_transferred_approved_declined_inPayment.pending : "transferred" in value ? Variant_pending_transferred_approved_declined_inPayment.transferred : "approved" in value ? Variant_pending_transferred_approved_declined_inPayment.approved : "declined" in value ? Variant_pending_transferred_approved_declined_inPayment.declined : "inPayment" in value ? Variant_pending_transferred_approved_declined_inPayment.inPayment : value;
 }
 function from_candid_variant_n18(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     pending: null;
@@ -990,7 +1029,7 @@ function to_candid__CaffeineStorageRefillInformation_n2(_uploadFile: (file: Exte
 function to_candid_opt_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CaffeineStorageRefillInformation | null): [] | [__CaffeineStorageRefillInformation] {
     return value === null ? candid_none() : candid_some(to_candid__CaffeineStorageRefillInformation_n2(_uploadFile, _downloadFile, value));
 }
-function to_candid_opt_n33(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Blob | null): [] | [_Blob] {
+function to_candid_opt_n34(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Blob | null): [] | [_Blob] {
     return value === null ? candid_none() : candid_some(value);
 }
 function to_candid_record_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -1001,6 +1040,25 @@ function to_candid_record_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8A
     return {
         proposed_top_up_amount: value.proposed_top_up_amount ? candid_some(value.proposed_top_up_amount) : candid_none()
     };
+}
+function to_candid_variant_n33(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Variant_transferred_approved_declined_inPayment): {
+    transferred: null;
+} | {
+    approved: null;
+} | {
+    declined: null;
+} | {
+    inPayment: null;
+} {
+    return value == Variant_transferred_approved_declined_inPayment.transferred ? {
+        transferred: null
+    } : value == Variant_transferred_approved_declined_inPayment.approved ? {
+        approved: null
+    } : value == Variant_transferred_approved_declined_inPayment.declined ? {
+        declined: null
+    } : value == Variant_transferred_approved_declined_inPayment.inPayment ? {
+        inPayment: null
+    } : value;
 }
 function to_candid_variant_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): {
     admin: null;

@@ -15,16 +15,18 @@ export interface BankDetails {
 }
 export interface Task {
     id: bigint;
+    reward: bigint;
     title: string;
     image?: Blob;
 }
 export interface PaymentRequest {
     id: bigint;
-    status: Variant_pending_accepted_declined;
+    status: Variant_pending_transferred_approved_declined_inPayment;
     userId: Principal;
     createdAt: bigint;
     orderId: string;
     amount: bigint;
+    coinsDeducted: boolean;
 }
 export interface Submission {
     id: bigint;
@@ -51,10 +53,18 @@ export enum UserRole {
     user = "user",
     guest = "guest"
 }
-export enum Variant_pending_accepted_declined {
+export enum Variant_pending_transferred_approved_declined_inPayment {
     pending = "pending",
-    accepted = "accepted",
-    declined = "declined"
+    transferred = "transferred",
+    approved = "approved",
+    declined = "declined",
+    inPayment = "inPayment"
+}
+export enum Variant_transferred_approved_declined_inPayment {
+    transferred = "transferred",
+    approved = "approved",
+    declined = "declined",
+    inPayment = "inPayment"
 }
 export interface backendInterface {
     addCoins(userId: Principal, amount: bigint): Promise<void>;
@@ -101,5 +111,6 @@ export interface backendInterface {
     }): Promise<void>;
     submitTask(taskId: bigint, file: Blob): Promise<void>;
     unblockUser(userId: Principal): Promise<void>;
-    updateTask(taskId: bigint, title: string, image: Blob | null): Promise<void>;
+    updatePaymentStatus(paymentId: bigint, newStatus: Variant_transferred_approved_declined_inPayment): Promise<void>;
+    updateTask(taskId: bigint, title: string, image: Blob | null, reward: bigint): Promise<void>;
 }

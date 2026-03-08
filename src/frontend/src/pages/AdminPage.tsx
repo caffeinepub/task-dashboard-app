@@ -33,6 +33,7 @@ import {
   Loader2,
   LogIn,
   RefreshCw,
+  Search,
   ShieldCheck,
   ShieldOff,
   Trash2,
@@ -63,6 +64,7 @@ import {
   useReviewSubmission,
   useTasks,
   useUnblockUser,
+  useUpdatePaymentStatus,
   useUpdateTask,
 } from "../hooks/useQueries";
 
@@ -110,6 +112,7 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
   const [title, setTitle] = useState(task.title);
   const taskConfig = TASK_CONFIG[index];
   const [startLink, setStartLink] = useState(taskConfig?.link ?? "");
+  const [reward, setReward] = useState<number>(Number(task.reward) || 0);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<Uint8Array | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -153,6 +156,7 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
         taskId: task.id,
         title,
         image: imageToSave,
+        reward: BigInt(reward),
       });
       setPendingImage(null);
       toast.success(`Task ${index + 1} updated`);
@@ -200,6 +204,18 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
           value={startLink}
           onChange={(e) => setStartLink(e.target.value)}
           placeholder="Start link (URL)"
+          className="h-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
+        />
+        <Input
+          data-ocid={`admin.task.reward_input.${index + 1}`}
+          type="number"
+          value={reward === 0 ? "" : reward}
+          onChange={(e) => {
+            const val = Number.parseInt(e.target.value, 10);
+            setReward(Number.isNaN(val) ? 0 : Math.max(0, val));
+          }}
+          placeholder="Reward (₹) e.g. 500"
+          min={0}
           className="h-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
         />
         <div className="flex gap-2">
@@ -393,6 +409,7 @@ function ExpandableUserCard({
   const unblockUser = useUnblockUser();
   const reviewSubmission = useReviewSubmission();
   const reviewPayment = useReviewPayment();
+  const updatePaymentStatus = useUpdatePaymentStatus();
   const adminUpdateBankDetails = useAdminUpdateBankDetails();
   const deleteUser = useDeleteUser();
   const { data: bankDetails } = useGetBankDetails(
@@ -485,9 +502,23 @@ function ExpandableUserCard({
   const handleReviewPayment = async (paymentId: bigint, approve: boolean) => {
     try {
       await reviewPayment.mutateAsync({ paymentId, approve });
-      toast.success(approve ? "Payment accepted!" : "Payment declined");
+      toast.success(approve ? "Payment approved!" : "Payment declined");
     } catch {
       toast.error("Failed to update payment");
+    }
+  };
+
+  const handleUpdatePaymentStatus = async (
+    paymentId: bigint,
+    newStatus: string,
+  ) => {
+    try {
+      await updatePaymentStatus.mutateAsync({ paymentId, newStatus });
+      toast.success(
+        `Payment marked as ${PAYMENT_STATUS_CONFIG[newStatus]?.label ?? newStatus}`,
+      );
+    } catch {
+      toast.error("Failed to update payment status");
     }
   };
 
@@ -795,63 +826,48 @@ function ExpandableUserCard({
                   <div className="space-y-1.5">
                     {userPayments.map((pmt) => {
                       const statusStr = String(pmt.status);
-                      const isPendingPmt = statusStr === "pending";
-                      const paymentStatusConfig: Record<
-                        string,
-                        { label: string; color: string; bg: string }
-                      > = {
-                        pending: {
-                          label: "Pending",
-                          color: "oklch(0.82 0.18 85)",
-                          bg: "oklch(0.82 0.18 85 / 0.12)",
-                        },
-                        accepted: {
-                          label: "Accepted",
-                          color: "oklch(0.72 0.18 155)",
-                          bg: "oklch(0.72 0.18 155 / 0.12)",
-                        },
-                        declined: {
-                          label: "Declined",
-                          color: "oklch(var(--destructive))",
-                          bg: "oklch(var(--destructive) / 0.12)",
-                        },
-                      };
                       const pmtCfg =
-                        paymentStatusConfig[statusStr] ??
-                        paymentStatusConfig.pending;
+                        PAYMENT_STATUS_CONFIG[statusStr] ??
+                        PAYMENT_STATUS_CONFIG.pending;
+                      const isPmtPending = statusStr === "pending";
+                      const isPmtApproved = statusStr === "approved";
+                      const isPmtInPayment = statusStr === "inPayment";
+                      const isPaymentActionPending =
+                        reviewPayment.isPending ||
+                        updatePaymentStatus.isPending;
                       return (
                         <div
                           key={String(pmt.id)}
-                          className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl"
+                          className="rounded-xl overflow-hidden"
                           style={{
                             background: "oklch(0.11 0.015 265 / 0.6)",
                             border: "1px solid oklch(0.82 0.18 85 / 0.06)",
                           }}
                         >
-                          <div className="min-w-0">
-                            <p
-                              className="text-xs font-bold tabular-nums"
-                              style={{ color: "oklch(0.82 0.18 85)" }}
-                            >
-                              {Number(pmt.amount).toLocaleString()} DC
-                            </p>
-                            {pmt.orderId && (
-                              <div className="flex items-center gap-1">
-                                <span className="text-[9px] font-mono text-muted-foreground">
-                                  #{pmt.orderId}
-                                </span>
-                                <CopyButton text={pmt.orderId} />
-                              </div>
-                            )}
-                            <p className="text-[10px] text-muted-foreground">
-                              {new Date(
-                                Number(pmt.createdAt) / 1_000_000,
-                              ).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="flex items-center justify-between gap-2 px-3 py-2">
+                            <div className="min-w-0">
+                              <p
+                                className="text-xs font-bold tabular-nums"
+                                style={{ color: "oklch(0.82 0.18 85)" }}
+                              >
+                                ₹{Number(pmt.amount).toLocaleString("en-IN")}
+                              </p>
+                              {pmt.orderId && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[9px] font-mono text-muted-foreground">
+                                    #{pmt.orderId}
+                                  </span>
+                                  <CopyButton text={pmt.orderId} />
+                                </div>
+                              )}
+                              <p className="text-[10px] text-muted-foreground">
+                                {new Date(
+                                  Number(pmt.createdAt) / 1_000_000,
+                                ).toLocaleDateString()}
+                              </p>
+                            </div>
                             <span
-                              className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                              className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0"
                               style={{
                                 background: pmtCfg.bg,
                                 color: pmtCfg.color,
@@ -859,44 +875,110 @@ function ExpandableUserCard({
                             >
                               {pmtCfg.label}
                             </span>
-                            {isPendingPmt && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    handleReviewPayment(pmt.id, true)
-                                  }
-                                  disabled={reviewPayment.isPending}
-                                  className="rounded-lg h-6 text-[10px] px-1.5"
-                                  style={{
-                                    background: "oklch(0.72 0.18 155 / 0.15)",
-                                    color: "oklch(0.72 0.18 155)",
-                                    border:
-                                      "1px solid oklch(0.72 0.18 155 / 0.3)",
-                                  }}
-                                >
-                                  <Check className="w-2.5 h-2.5" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    handleReviewPayment(pmt.id, false)
-                                  }
-                                  disabled={reviewPayment.isPending}
-                                  className="rounded-lg h-6 text-[10px] px-1.5"
-                                  style={{
-                                    background:
-                                      "oklch(var(--destructive) / 0.15)",
-                                    color: "oklch(var(--destructive))",
-                                    border:
-                                      "1px solid oklch(var(--destructive) / 0.3)",
-                                  }}
-                                >
-                                  <X className="w-2.5 h-2.5" />
-                                </Button>
-                              </>
-                            )}
                           </div>
+                          {/* Stage-based inline action buttons */}
+                          {isPmtPending && (
+                            <div className="flex gap-1.5 px-3 pb-2">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  handleReviewPayment(pmt.id, true)
+                                }
+                                disabled={isPaymentActionPending}
+                                className="flex-1 rounded-lg h-6 text-[10px]"
+                                style={{
+                                  background: "oklch(0.72 0.18 155 / 0.15)",
+                                  color: "oklch(0.72 0.18 155)",
+                                  border:
+                                    "1px solid oklch(0.72 0.18 155 / 0.3)",
+                                }}
+                              >
+                                {isPaymentActionPending ? (
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Check className="w-2.5 h-2.5 mr-1" />
+                                    Approve
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  handleReviewPayment(pmt.id, false)
+                                }
+                                disabled={isPaymentActionPending}
+                                className="flex-1 rounded-lg h-6 text-[10px]"
+                                style={{
+                                  background:
+                                    "oklch(var(--destructive) / 0.15)",
+                                  color: "oklch(var(--destructive))",
+                                  border:
+                                    "1px solid oklch(var(--destructive) / 0.3)",
+                                }}
+                              >
+                                <X className="w-2.5 h-2.5 mr-1" />
+                                Decline
+                              </Button>
+                            </div>
+                          )}
+                          {isPmtApproved && (
+                            <div className="px-3 pb-2">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  handleUpdatePaymentStatus(pmt.id, "inPayment")
+                                }
+                                disabled={isPaymentActionPending}
+                                className="w-full rounded-lg h-6 text-[10px]"
+                                style={{
+                                  background: "oklch(0.75 0.18 195 / 0.15)",
+                                  color: "oklch(0.75 0.18 195)",
+                                  border:
+                                    "1px solid oklch(0.75 0.18 195 / 0.3)",
+                                }}
+                              >
+                                {isPaymentActionPending ? (
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <ArrowRightLeft className="w-2.5 h-2.5 mr-1" />
+                                    In Payment
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                          {isPmtInPayment && (
+                            <div className="px-3 pb-2">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  handleUpdatePaymentStatus(
+                                    pmt.id,
+                                    "transferred",
+                                  )
+                                }
+                                disabled={isPaymentActionPending}
+                                className="w-full rounded-lg h-6 text-[10px]"
+                                style={{
+                                  background: "oklch(0.72 0.18 155 / 0.15)",
+                                  color: "oklch(0.72 0.18 155)",
+                                  border:
+                                    "1px solid oklch(0.72 0.18 155 / 0.3)",
+                                }}
+                              >
+                                {isPaymentActionPending ? (
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <CheckCircle className="w-2.5 h-2.5 mr-1" />
+                                    Transferred
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1076,6 +1158,45 @@ function ExpandableUserCard({
   );
 }
 
+// ─── Payment Status Config ────────────────────────────────────────────────────
+
+const PAYMENT_STATUS_CONFIG: Record<
+  string,
+  { bg: string; color: string; label: string }
+> = {
+  pending: {
+    bg: "oklch(0.82 0.18 85 / 0.12)",
+    color: "oklch(0.82 0.18 85)",
+    label: "Pending",
+  },
+  approved: {
+    bg: "oklch(0.72 0.18 155 / 0.12)",
+    color: "oklch(0.72 0.18 155)",
+    label: "Approved",
+  },
+  inPayment: {
+    bg: "oklch(0.75 0.18 195 / 0.12)",
+    color: "oklch(0.75 0.18 195)",
+    label: "In Payment",
+  },
+  transferred: {
+    bg: "oklch(0.72 0.18 155 / 0.12)",
+    color: "oklch(0.72 0.18 155)",
+    label: "Transferred",
+  },
+  declined: {
+    bg: "oklch(var(--destructive) / 0.12)",
+    color: "oklch(var(--destructive))",
+    label: "Declined",
+  },
+  // backward compat
+  accepted: {
+    bg: "oklch(0.72 0.18 155 / 0.12)",
+    color: "oklch(0.72 0.18 155)",
+    label: "Approved",
+  },
+};
+
 // ─── Payment Row ────────────────────────────────────────────────────────────
 
 function PaymentRow({
@@ -1083,35 +1204,21 @@ function PaymentRow({
   index,
 }: { payment: PaymentRequest; index: number }) {
   const reviewPayment = useReviewPayment();
+  const updatePaymentStatus = useUpdatePaymentStatus();
 
   const principalStr = payment.userId.toString();
   const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
-  const statusStr = String(payment.status) as string;
+  const statusStr = String(payment.status);
 
-  const isPending = statusStr === "pending";
-  const isAccepted = statusStr === "accepted";
+  const isPendingStatus = statusStr === "pending";
+  const isApproved = statusStr === "approved";
+  const isInPayment = statusStr === "inPayment";
+  const isTransferred = statusStr === "transferred";
+  const isDeclined = statusStr === "declined";
+  const isFinal = isTransferred || isDeclined;
 
-  const statusStyles: Record<
-    string,
-    { bg: string; color: string; label: string }
-  > = {
-    pending: {
-      bg: "oklch(0.82 0.18 85 / 0.12)",
-      color: "oklch(0.82 0.18 85)",
-      label: "Pending",
-    },
-    accepted: {
-      bg: "oklch(0.72 0.18 155 / 0.12)",
-      color: "oklch(0.72 0.18 155)",
-      label: "Accepted",
-    },
-    declined: {
-      bg: "oklch(var(--destructive) / 0.12)",
-      color: "oklch(var(--destructive))",
-      label: "Declined",
-    },
-  };
-  const style = statusStyles[statusStr] ?? statusStyles.pending;
+  const style =
+    PAYMENT_STATUS_CONFIG[statusStr] ?? PAYMENT_STATUS_CONFIG.pending;
 
   const createdDate = new Date(
     Number(payment.createdAt) / 1_000_000,
@@ -1120,11 +1227,28 @@ function PaymentRow({
   const handleReview = async (approve: boolean) => {
     try {
       await reviewPayment.mutateAsync({ paymentId: payment.id, approve });
-      toast.success(approve ? "Payment accepted!" : "Payment declined");
+      toast.success(approve ? "Payment approved!" : "Payment declined");
     } catch {
       toast.error("Failed to update payment");
     }
   };
+
+  const handleUpdateStatus = async (newStatus: string) => {
+    try {
+      await updatePaymentStatus.mutateAsync({
+        paymentId: payment.id,
+        newStatus,
+      });
+      toast.success(
+        `Payment marked as ${PAYMENT_STATUS_CONFIG[newStatus]?.label ?? newStatus}`,
+      );
+    } catch {
+      toast.error("Failed to update payment status");
+    }
+  };
+
+  const isActionPending =
+    reviewPayment.isPending || updatePaymentStatus.isPending;
 
   return (
     <div
@@ -1153,9 +1277,9 @@ function PaymentRow({
                 className="font-display font-bold text-xl"
                 style={{ color: "oklch(0.82 0.18 85)" }}
               >
-                {Number(payment.amount).toLocaleString()}
+                ₹{Number(payment.amount).toLocaleString("en-IN")}
               </span>
-              <span className="text-muted-foreground text-xs">coins</span>
+              <span className="text-muted-foreground text-xs">INR</span>
             </div>
             <span className="text-muted-foreground text-xs">{createdDate}</span>
           </div>
@@ -1176,13 +1300,14 @@ function PaymentRow({
         </span>
       </div>
 
-      {isPending && (
+      {/* Stage-based action buttons */}
+      {isPendingStatus && (
         <div className="flex gap-2">
           <Button
             data-ocid={`admin.payment.approve_button.${index + 1}`}
             size="sm"
             onClick={() => handleReview(true)}
-            disabled={reviewPayment.isPending}
+            disabled={isActionPending}
             className="flex-1 rounded-xl h-9 text-xs font-semibold"
             style={{
               background: "oklch(0.72 0.18 155 / 0.15)",
@@ -1190,12 +1315,12 @@ function PaymentRow({
               border: "1px solid oklch(0.72 0.18 155 / 0.3)",
             }}
           >
-            {reviewPayment.isPending ? (
+            {isActionPending ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
               <>
                 <Check className="w-3 h-3 mr-1" />
-                Accept
+                Approve
               </>
             )}
           </Button>
@@ -1203,7 +1328,7 @@ function PaymentRow({
             data-ocid={`admin.payment.decline_button.${index + 1}`}
             size="sm"
             onClick={() => handleReview(false)}
-            disabled={reviewPayment.isPending}
+            disabled={isActionPending}
             className="flex-1 rounded-xl h-9 text-xs font-semibold"
             style={{
               background: "oklch(var(--destructive) / 0.15)",
@@ -1217,21 +1342,69 @@ function PaymentRow({
         </div>
       )}
 
-      {!isPending && (
+      {isApproved && (
+        <Button
+          data-ocid={`admin.payment.in_payment_button.${index + 1}`}
+          size="sm"
+          onClick={() => handleUpdateStatus("inPayment")}
+          disabled={isActionPending}
+          className="w-full rounded-xl h-9 text-xs font-semibold"
+          style={{
+            background: "oklch(0.75 0.18 195 / 0.15)",
+            color: "oklch(0.75 0.18 195)",
+            border: "1px solid oklch(0.75 0.18 195 / 0.3)",
+          }}
+        >
+          {isActionPending ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <>
+              <ArrowRightLeft className="w-3 h-3 mr-1.5" />
+              Mark In Payment
+            </>
+          )}
+        </Button>
+      )}
+
+      {isInPayment && (
+        <Button
+          data-ocid={`admin.payment.transferred_button.${index + 1}`}
+          size="sm"
+          onClick={() => handleUpdateStatus("transferred")}
+          disabled={isActionPending}
+          className="w-full rounded-xl h-9 text-xs font-semibold"
+          style={{
+            background: "oklch(0.72 0.18 155 / 0.15)",
+            color: "oklch(0.72 0.18 155)",
+            border: "1px solid oklch(0.72 0.18 155 / 0.3)",
+          }}
+        >
+          {isActionPending ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <>
+              <CheckCircle className="w-3 h-3 mr-1.5" />
+              Mark Transferred
+            </>
+          )}
+        </Button>
+      )}
+
+      {isFinal && (
         <div
           className="flex items-center gap-1.5 text-xs"
           style={{
-            color: isAccepted
+            color: isTransferred
               ? "oklch(0.72 0.18 155)"
               : "oklch(var(--destructive))",
           }}
         >
-          {isAccepted ? (
+          {isTransferred ? (
             <CheckCircle className="w-3.5 h-3.5" />
           ) : (
             <X className="w-3.5 h-3.5" />
           )}
-          <span>{isAccepted ? "Payment accepted" : "Payment declined"}</span>
+          <span>{isTransferred ? "Transferred ✓" : "Payment declined"}</span>
         </div>
       )}
     </div>
@@ -1302,7 +1475,7 @@ function ActivityTab({
     events.push({
       id: `pmt-${String(pmt.id)}`,
       type: "payment",
-      description: `Requested withdrawal of ${Number(pmt.amount).toLocaleString()} coins`,
+      description: `Requested withdrawal of ₹${Number(pmt.amount).toLocaleString("en-IN")}`,
       userIdentifier: shortP,
       timestamp: Number(pmt.createdAt) / 1_000_000,
     });
@@ -1445,6 +1618,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const clearAllData = useClearAllData();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
 
   const pendingSubmissions =
     submissions?.filter((s) => String(s.status) === "pending").length ?? 0;
@@ -1713,6 +1887,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
           {/* ── Users Tab (Full Rebuild) ── */}
           <TabsContent value="users" className="space-y-3 mt-0">
+            {/* Search bar */}
+            <div className="mb-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  data-ocid="admin.users.search_input"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search by email or principal ID..."
+                  className="h-10 pl-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
+                />
+              </div>
+            </div>
+
             {/* Summary stats */}
             <div className="grid grid-cols-3 gap-2 mb-2">
               {[
@@ -1778,21 +1966,46 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </p>
               </div>
             ) : (
-              analyticsData.map((entry, i) => (
-                <motion.div
-                  key={entry.userId.toString()}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                >
-                  <ExpandableUserCard
-                    entry={entry}
-                    index={i}
-                    allSubmissions={submissions ?? []}
-                    allPayments={payments ?? []}
-                  />
-                </motion.div>
-              ))
+              (() => {
+                const filteredUsers = analyticsData.filter((entry) => {
+                  if (!userSearch.trim()) return true;
+                  const q = userSearch.toLowerCase();
+                  return (
+                    entry.email.toLowerCase().includes(q) ||
+                    entry.userId.toString().toLowerCase().includes(q)
+                  );
+                });
+                return filteredUsers.length === 0 ? (
+                  <div
+                    data-ocid="admin.user.empty_state"
+                    className="flex flex-col items-center justify-center py-12 text-center"
+                  >
+                    <Search className="w-8 h-8 text-muted-foreground mb-3 opacity-40" />
+                    <p className="text-muted-foreground text-sm">
+                      No users found
+                    </p>
+                    <p className="text-muted-foreground text-xs mt-1">
+                      Try searching by a different email or principal ID
+                    </p>
+                  </div>
+                ) : (
+                  filteredUsers.map((entry, i) => (
+                    <motion.div
+                      key={entry.userId.toString()}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                    >
+                      <ExpandableUserCard
+                        entry={entry}
+                        index={i}
+                        allSubmissions={submissions ?? []}
+                        allPayments={payments ?? []}
+                      />
+                    </motion.div>
+                  ))
+                );
+              })()
             )}
           </TabsContent>
 

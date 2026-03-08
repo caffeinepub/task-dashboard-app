@@ -206,14 +206,14 @@ export function HomePage({ profile, isAdmin, principal }: HomePageProps) {
               style={{ color: "oklch(0.82 0.18 85)" }}
             >
               {coinBalance !== undefined
-                ? Number(coinBalance).toLocaleString()
+                ? `₹${Number(coinBalance).toLocaleString("en-IN")}`
                 : "—"}
             </span>
             <span
               className="text-xs font-semibold"
               style={{ color: "oklch(0.82 0.18 85 / 0.65)" }}
             >
-              DC
+              INR
             </span>
           </div>
         </motion.div>

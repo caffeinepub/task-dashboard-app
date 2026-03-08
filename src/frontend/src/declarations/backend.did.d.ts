@@ -19,12 +19,15 @@ export type Blob = Uint8Array;
 export interface PaymentRequest {
   'id' : bigint,
   'status' : { 'pending' : null } |
-    { 'accepted' : null } |
-    { 'declined' : null },
+    { 'transferred' : null } |
+    { 'approved' : null } |
+    { 'declined' : null } |
+    { 'inPayment' : null },
   'userId' : Principal,
   'createdAt' : bigint,
   'orderId' : string,
   'amount' : bigint,
+  'coinsDeducted' : boolean,
 }
 export interface Submission {
   'id' : bigint,
@@ -34,7 +37,12 @@ export interface Submission {
   'createdAt' : bigint,
   'taskId' : bigint,
 }
-export interface Task { 'id' : bigint, 'title' : string, 'image' : [] | [Blob] }
+export interface Task {
+  'id' : bigint,
+  'reward' : bigint,
+  'title' : string,
+  'image' : [] | [Blob],
+}
 export type TaskStatus = { 'pending' : null } |
   { 'approved' : null } |
   { 'declined' : null };
@@ -130,7 +138,17 @@ export interface _SERVICE {
   >,
   'submitTask' : ActorMethod<[bigint, Blob], undefined>,
   'unblockUser' : ActorMethod<[Principal], undefined>,
-  'updateTask' : ActorMethod<[bigint, string, [] | [Blob]], undefined>,
+  'updatePaymentStatus' : ActorMethod<
+    [
+      bigint,
+      { 'transferred' : null } |
+        { 'approved' : null } |
+        { 'declined' : null } |
+        { 'inPayment' : null },
+    ],
+    undefined
+  >,
+  'updateTask' : ActorMethod<[bigint, string, [] | [Blob], bigint], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

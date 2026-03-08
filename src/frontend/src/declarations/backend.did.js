@@ -28,13 +28,16 @@ export const PaymentRequest = IDL.Record({
   'id' : IDL.Nat,
   'status' : IDL.Variant({
     'pending' : IDL.Null,
-    'accepted' : IDL.Null,
+    'transferred' : IDL.Null,
+    'approved' : IDL.Null,
     'declined' : IDL.Null,
+    'inPayment' : IDL.Null,
   }),
   'userId' : IDL.Principal,
   'createdAt' : IDL.Int,
   'orderId' : IDL.Text,
   'amount' : IDL.Nat,
+  'coinsDeducted' : IDL.Bool,
 });
 export const TaskStatus = IDL.Variant({
   'pending' : IDL.Null,
@@ -64,6 +67,7 @@ export const UserProfile = IDL.Record({
 });
 export const Task = IDL.Record({
   'id' : IDL.Nat,
+  'reward' : IDL.Nat,
   'title' : IDL.Text,
   'image' : IDL.Opt(Blob),
 });
@@ -180,7 +184,20 @@ export const idlService = IDL.Service({
     ),
   'submitTask' : IDL.Func([IDL.Nat, Blob], [], []),
   'unblockUser' : IDL.Func([IDL.Principal], [], []),
-  'updateTask' : IDL.Func([IDL.Nat, IDL.Text, IDL.Opt(Blob)], [], []),
+  'updatePaymentStatus' : IDL.Func(
+      [
+        IDL.Nat,
+        IDL.Variant({
+          'transferred' : IDL.Null,
+          'approved' : IDL.Null,
+          'declined' : IDL.Null,
+          'inPayment' : IDL.Null,
+        }),
+      ],
+      [],
+      [],
+    ),
+  'updateTask' : IDL.Func([IDL.Nat, IDL.Text, IDL.Opt(Blob), IDL.Nat], [], []),
 });
 
 export const idlInitArgs = [];
@@ -206,13 +223,16 @@ export const idlFactory = ({ IDL }) => {
     'id' : IDL.Nat,
     'status' : IDL.Variant({
       'pending' : IDL.Null,
-      'accepted' : IDL.Null,
+      'transferred' : IDL.Null,
+      'approved' : IDL.Null,
       'declined' : IDL.Null,
+      'inPayment' : IDL.Null,
     }),
     'userId' : IDL.Principal,
     'createdAt' : IDL.Int,
     'orderId' : IDL.Text,
     'amount' : IDL.Nat,
+    'coinsDeducted' : IDL.Bool,
   });
   const TaskStatus = IDL.Variant({
     'pending' : IDL.Null,
@@ -242,6 +262,7 @@ export const idlFactory = ({ IDL }) => {
   });
   const Task = IDL.Record({
     'id' : IDL.Nat,
+    'reward' : IDL.Nat,
     'title' : IDL.Text,
     'image' : IDL.Opt(Blob),
   });
@@ -358,7 +379,24 @@ export const idlFactory = ({ IDL }) => {
       ),
     'submitTask' : IDL.Func([IDL.Nat, Blob], [], []),
     'unblockUser' : IDL.Func([IDL.Principal], [], []),
-    'updateTask' : IDL.Func([IDL.Nat, IDL.Text, IDL.Opt(Blob)], [], []),
+    'updatePaymentStatus' : IDL.Func(
+        [
+          IDL.Nat,
+          IDL.Variant({
+            'transferred' : IDL.Null,
+            'approved' : IDL.Null,
+            'declined' : IDL.Null,
+            'inPayment' : IDL.Null,
+          }),
+        ],
+        [],
+        [],
+      ),
+    'updateTask' : IDL.Func(
+        [IDL.Nat, IDL.Text, IDL.Opt(Blob), IDL.Nat],
+        [],
+        [],
+      ),
   });
 };
 

@@ -174,10 +174,12 @@ export function useUpdateTask() {
       taskId,
       title,
       image,
+      reward,
     }: {
       taskId: bigint;
       title: string;
       image: Uint8Array | null;
+      reward: bigint;
     }) => {
       if (!actor) throw new Error("Not connected");
       // Motoko ?Blob is encoded as undefined (None) or Uint8Array (Some) by the ICP SDK
@@ -185,7 +187,7 @@ export function useUpdateTask() {
       const imageArg: Uint8Array | undefined =
         image !== null && image !== undefined ? image : undefined;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return actor.updateTask(taskId, title, imageArg as any);
+      return actor.updateTask(taskId, title, imageArg as any, reward);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -348,6 +350,30 @@ export function useReviewPayment() {
   });
 }
 
+export function useUpdatePaymentStatus() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      paymentId,
+      newStatus,
+    }: { paymentId: bigint; newStatus: string }) => {
+      if (!actor) throw new Error("Not connected");
+      // newStatus is one of: "approved" | "inPayment" | "transferred" | "declined"
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (actor as any).updatePaymentStatus(paymentId, {
+        [newStatus]: null,
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["allPayments"] });
+      void queryClient.invalidateQueries({ queryKey: ["userPayments"] });
+      void queryClient.invalidateQueries({ queryKey: ["coinBalance"] });
+      void queryClient.invalidateQueries({ queryKey: ["callerProfile"] });
+    },
+  });
+}
+
 // ─── Analytics ─────────────────────────────────────────────────────────────
 
 export function useAllUsersAnalytics() {
@@ -423,6 +449,10 @@ export function getStatusClass(status: TaskStatus | string): string {
   switch (status) {
     case "approved":
       return "status-approved";
+    case "inPayment":
+      return "status-in-payment";
+    case "transferred":
+      return "status-transferred";
     case "declined":
       return "status-declined";
     default:
@@ -434,6 +464,10 @@ export function getStatusLabel(status: TaskStatus | string): string {
   switch (status) {
     case "approved":
       return "Approved";
+    case "inPayment":
+      return "In Payment";
+    case "transferred":
+      return "Transferred";
     case "declined":
       return "Declined";
     default:

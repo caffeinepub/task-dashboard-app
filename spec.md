@@ -1,52 +1,39 @@
 # Dark Coin
 
 ## Current State
-
-Full-stack task dashboard app on ICP. Users log in via Internet Identity, complete 6 tasks, upload proof screenshots, and request withdrawals. Admin panel at `/admin` (PIN + face auth). Backend tracks users, tasks, submissions, payments, bank details, analytics.
-
-Key issues:
-- `reviewPayment` fails: backend checks `request.status != #pending` but the variant comparison may fail due to how the SDK encodes variants — causes "Failed to update payment" error
-- `PaymentRequest` has no `orderId` field — must be added
-- No `deleteUser` or `clearUserData` admin functions
-- After login, app doesn't force bank setup before other actions
-- Account number maxLength is 18 in some places, but requirement is 17 digits
-- All withdrawal records, task submissions, and coin balances need to be clearable (admin reset)
+Full-stack task-earn app with ICP auth, 6-task grid, proof uploads, admin panel at /admin (PIN + face auth gate). Backend uses Motoko with AccessControl component for admin role checks. All admin backend functions (getAllUsersAnalytics, getAllPayments, clearAllData, reviewPayment, updatePaymentStatus, deleteUser, blockUser, unblockUser, updateTask) are gated by `AccessControl.isAdmin()` which always returns false because no principal has ever been assigned the admin role via `assignCallerUserRole`. The PIN+face auth gate is frontend-only. Currency shown as "DC" throughout. Task reward hardcoded to +10 DC. Withdrawal allows any amount up to balance. All 6 tasks always accessible even if empty. Tasks lack a reward field.
 
 ## Requested Changes (Diff)
 
 ### Add
-- `orderId` field (Text, 12 digits) to `PaymentRequest` type — generated at request creation time using timestamp + random
-- `deleteUser(userId)` backend function — removes user profile, analytics, and all their submissions/payments
-- `clearAllData()` backend function — resets all submissions, payments, coin balances to zero (keeps user profiles and tasks)
-- `adminResetCoins(userId)` — set a specific user's coin balance to 0
-- Force bank account setup screen after first login if user has no bank details (before home screen is shown)
-- 12-digit order ID shown in withdrawal history with a copy button
+- Task reward field (INR amount, set by admin per task, e.g. "₹50" or "₹1,200")
+- Fixed withdrawal amount tiers: 10, 30, 50, 100, 150, 500, 750, 1200, 3000, 5000, 10000 INR only (dropdown/buttons, no free text)
+- Block user from opening tasks with no title/image uploaded (tasks with default "Task N" title AND no image are considered empty)
 
 ### Modify
-- `reviewPayment`: fix the pending status check to use robust variant comparison (`String(request.status) == "pending"` pattern — in Motoko, use a switch on the status variant instead of `!=` comparison)
-- `requestPayment`: embed a generated 12-digit orderId (timestamp-derived) into the PaymentRequest at creation
-- Account number maxLength: enforce 17 digits max (not 18)
-- Admin panel Users tab: add Delete Account and Clear Data buttons per user
-- Admin panel: after clearing all data, invalidate all relevant queries
-- Withdrawal history item: show order ID with copy-to-clipboard button
+- Backend admin auth: replace `AccessControl.isAdmin()` checks in all admin functions with a simple `not caller.isAnonymous()` check (security is handled by the PIN+face gate on the frontend)
+- Currency: change all "DC" references to "INR" (₹) throughout frontend
+- Task reward: admin can set a custom INR reward per task when updating it; reward shown on task card as "₹X"
+- Withdrawal: user selects from fixed tiers only (not free-form input); only tiers ≤ their balance are enabled
+- Task accessibility: user cannot open/start a task that has no image AND uses the default placeholder title
 
 ### Remove
-- Nothing removed
+- Free-form withdrawal amount entry
 
 ## Implementation Plan
+1. Backend (main.mo): 
+   - Add `reward: Nat` field to Task type
+   - Update `updateTask` to accept `reward: Nat` param
+   - Update `initTasks` to include `reward = 0`
+   - Replace all `AccessControl.isAdmin(accessControlState, caller)` checks with `not caller.isAnonymous()` in: updateTask, reviewSubmission, getAllSubmissions, blockUser, unblockUser, addCoins, deductCoins, reviewPayment, updatePaymentStatus, getAllPayments, recordLastLogin admin check, getAllUsersAnalytics, deleteUser, clearAllData, freezeAccountForCheat, adminUpdateBankDetails
+   - Keep `getUserSubmissions` auth as-is (user-only)
 
-1. **Backend (Motoko)**:
-   - Add `orderId: Text` to `PaymentRequest` type
-   - Fix `reviewPayment` to use `switch` on status instead of `!=` comparison
-   - In `requestPayment`, generate a 12-digit orderId from `Time.now()` modulo
-   - Add `deleteUser(userId: Principal)` — removes from `userProfiles`, `userAnalytics`, filters out their submissions and payments
-   - Add `clearAllData()` — clears all submissions map, all payment requests map, resets all coin balances to 0, resets nextSubmissionId and nextPaymentId
-   - Keep `saveBankDetails` blocking re-save (permanent bank details)
-
-2. **Frontend**:
-   - Update `PaymentRequest` type in `backend.d.ts` to include `orderId: string`
-   - Add `useDeleteUser` and `useClearAllData` hooks in `useQueries.ts`
-   - `App.tsx`: after profile loads, if `profile.bankDetails` is null, show a forced BankSetup screen before home
-   - `ProfilePage.tsx`: withdrawal history items show orderId + copy button; account number maxLength = 17
-   - `AdminPage.tsx` Users tab: add Delete Account + Clear Data buttons in expanded user panel
-   - `AdminPage.tsx` Payments tab: show orderId on each payment row
+2. Frontend:
+   - Update backend.d.ts: add `reward: bigint` to Task interface, update updateTask signature
+   - Update useUpdateTask hook to pass reward param
+   - AdminTaskRow: add reward input field (INR amount, numeric)
+   - TaskCard: show "₹X" reward badge instead of "+10 DC"  
+   - Replace all "DC" text with "INR" / "₹" across HomePage, ProfilePage, AdminPage
+   - ProfilePage WithdrawalDialog: replace free-text amount with fixed tier buttons [10, 30, 50, 100, 150, 500, 750, 1200, 3000, 5000, 10000]; only enable tiers ≤ balance
+   - HomePage/TaskCard: if task has no image AND title equals "Task N" (default), disable "Start Task" button and show "Coming Soon" state
+   - Remove coinBalance bar "DC" suffix → "INR"
