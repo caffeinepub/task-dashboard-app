@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import type { Principal } from "@icp-sdk/core/principal";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -32,8 +33,10 @@ import {
   ImageOff,
   Loader2,
   LogIn,
+  MessageSquare,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
   ShieldOff,
   Trash2,
@@ -43,7 +46,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { PaymentRequest, Submission, Task } from "../backend.d";
 import { TASK_CONFIG } from "../components/app/TaskCard";
@@ -281,7 +284,15 @@ function AdminTaskRow({ task, index }: { task: Task; index: number }) {
 
 // ─── Submission Row ─────────────────────────────────────────────────────────
 
-function SubmissionRow({ sub, index }: { sub: Submission; index: number }) {
+function SubmissionRow({
+  sub,
+  index,
+  uniqueIdMap,
+}: {
+  sub: Submission;
+  index: number;
+  uniqueIdMap: Record<string, string>;
+}) {
   const reviewSubmission = useReviewSubmission();
   const { data: tasks } = useTasks();
   const [fileUrl, setFileUrl] = useState<string | null>(null);
@@ -306,7 +317,10 @@ function SubmissionRow({ sub, index }: { sub: Submission; index: number }) {
     tasks?.find((t) => t.id === sub.taskId)?.title ??
     `Task ${String(sub.taskId)}`;
   const principalStr = sub.userId.toString();
-  const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
+  const uniqueId = uniqueIdMap[principalStr];
+  const shortPrincipal = uniqueId
+    ? `ID: ${uniqueId}`
+    : `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
 
   const handleReview = async (approve: boolean) => {
     try {
@@ -1224,12 +1238,20 @@ const PAYMENT_STATUS_CONFIG: Record<
 function PaymentRow({
   payment,
   index,
-}: { payment: PaymentRequest; index: number }) {
+  uniqueIdMap,
+}: {
+  payment: PaymentRequest;
+  index: number;
+  uniqueIdMap: Record<string, string>;
+}) {
   const reviewPayment = useReviewPayment();
   const updatePaymentStatus = useUpdatePaymentStatus();
 
   const principalStr = payment.userId.toString();
-  const shortPrincipal = `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
+  const uniqueId = uniqueIdMap[principalStr];
+  const shortPrincipal = uniqueId
+    ? `ID: ${uniqueId}`
+    : `${principalStr.slice(0, 8)}…${principalStr.slice(-6)}`;
   const statusStr = String(payment.status);
 
   const isPendingStatus = statusStr === "pending";
@@ -1460,6 +1482,7 @@ function ActivityTab({
   submissions,
   payments,
   analyticsData,
+  uniqueIdMap,
   onRefresh,
   isRefreshing,
 }: {
@@ -1472,6 +1495,7 @@ function ActivityTab({
     tasksCompleted: bigint;
     totalSubmissions: bigint;
   }>;
+  uniqueIdMap: Record<string, string>;
   onRefresh: () => void;
   isRefreshing: boolean;
 }) {
@@ -1480,7 +1504,10 @@ function ActivityTab({
   // Submission events
   for (const sub of submissions) {
     const principalStr = sub.userId.toString();
-    const shortP = `${principalStr.slice(0, 8)}…${principalStr.slice(-5)}`;
+    const uid = uniqueIdMap[principalStr];
+    const shortP = uid
+      ? `ID: ${uid}`
+      : `${principalStr.slice(0, 8)}…${principalStr.slice(-5)}`;
     events.push({
       id: `sub-${String(sub.id)}`,
       type: "submission",
@@ -1493,7 +1520,10 @@ function ActivityTab({
   // Payment events
   for (const pmt of payments) {
     const principalStr = pmt.userId.toString();
-    const shortP = `${principalStr.slice(0, 8)}…${principalStr.slice(-5)}`;
+    const uid = uniqueIdMap[principalStr];
+    const shortP = uid
+      ? `ID: ${uid}`
+      : `${principalStr.slice(0, 8)}…${principalStr.slice(-5)}`;
     events.push({
       id: `pmt-${String(pmt.id)}`,
       type: "payment",
@@ -1507,8 +1537,10 @@ function ActivityTab({
   for (const entry of analyticsData) {
     if (!entry.lastLogin) continue;
     const principalStr = entry.userId.toString();
-    const identifier =
-      entry.email || `${principalStr.slice(0, 8)}…${principalStr.slice(-5)}`;
+    const uid = uniqueIdMap[principalStr];
+    const identifier = uid
+      ? `ID: ${uid}`
+      : entry.email || `${principalStr.slice(0, 8)}…${principalStr.slice(-5)}`;
     events.push({
       id: `login-${principalStr}`,
       type: "login",
@@ -1628,6 +1660,328 @@ function ActivityTab({
   );
 }
 
+// ─── Admin CCA Chat ──────────────────────────────────────────────────────────
+
+interface CcaMessage {
+  id: string;
+  role: "user" | "admin";
+  text: string;
+  timestamp: number;
+}
+
+function AdminCCAChat() {
+  const [selectedUniqueId, setSelectedUniqueId] = useState<string | null>(null);
+  const [chatSearch, setChatSearch] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [, forceUpdate] = useState(0);
+
+  // Get all CCA chat keys from localStorage
+  const getAllChats = (): Array<{
+    uniqueId: string;
+    messages: CcaMessage[];
+    unread: number;
+  }> => {
+    const chats: Array<{
+      uniqueId: string;
+      messages: CcaMessage[];
+      unread: number;
+    }> = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("cca_chat_")) {
+        const uid = key.replace("cca_chat_", "");
+        try {
+          const raw = localStorage.getItem(key);
+          const messages: CcaMessage[] = raw ? JSON.parse(raw) : [];
+          const unread = messages.filter(
+            (m) => m.role === "user" && !m.id.includes("_read"),
+          ).length;
+          chats.push({ uniqueId: uid, messages, unread });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    return chats.sort((a, b) => {
+      const aLast = a.messages[a.messages.length - 1]?.timestamp ?? 0;
+      const bLast = b.messages[b.messages.length - 1]?.timestamp ?? 0;
+      return bLast - aLast;
+    });
+  };
+
+  const getMessages = (uid: string): CcaMessage[] => {
+    try {
+      const raw = localStorage.getItem(`cca_chat_${uid}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveMessages = (uid: string, messages: CcaMessage[]) => {
+    localStorage.setItem(`cca_chat_${uid}`, JSON.stringify(messages));
+    forceUpdate((n) => n + 1);
+  };
+
+  const handleSendReply = () => {
+    if (!selectedUniqueId || !replyText.trim()) return;
+    const messages = getMessages(selectedUniqueId);
+    const newMsg: CcaMessage = {
+      id: `admin_${Date.now()}`,
+      role: "admin",
+      text: replyText.trim(),
+      timestamp: Date.now(),
+    };
+    saveMessages(selectedUniqueId, [...messages, newMsg]);
+    setReplyText("");
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }, 50);
+  };
+
+  const allChats = getAllChats();
+  const filteredChats = chatSearch.trim()
+    ? allChats.filter((c) => c.uniqueId.includes(chatSearch.trim()))
+    : allChats;
+
+  const selectedMessages = selectedUniqueId
+    ? getMessages(selectedUniqueId)
+    : [];
+
+  // Auto-scroll when messages change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on message change
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [selectedMessages.length, selectedUniqueId]);
+
+  return (
+    <div className="space-y-3">
+      {selectedUniqueId ? (
+        // Chat view for selected user
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Button
+              data-ocid="admin.chat.back_button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedUniqueId(null)}
+              className="rounded-xl h-8 text-xs"
+            >
+              <ArrowLeft className="w-3 h-3 mr-1.5" />
+              Back
+            </Button>
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
+              style={{
+                background: "oklch(0.72 0.18 155 / 0.1)",
+                border: "1px solid oklch(0.72 0.18 155 / 0.2)",
+              }}
+            >
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ background: "oklch(0.72 0.18 155)" }}
+              />
+              <span className="text-xs font-mono font-bold text-foreground">
+                ID: {selectedUniqueId}
+              </span>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div
+            ref={scrollRef}
+            className="h-96 overflow-y-auto space-y-2 p-3 rounded-2xl"
+            style={{
+              background: "oklch(0.09 0.01 265 / 0.6)",
+              border: "1px solid oklch(0.82 0.18 85 / 0.08)",
+            }}
+          >
+            {selectedMessages.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground text-xs text-center">
+                  No messages yet
+                </p>
+              </div>
+            ) : (
+              selectedMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.role === "admin" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className="max-w-[80%] px-3 py-2 rounded-2xl text-sm"
+                    style={
+                      msg.role === "admin"
+                        ? {
+                            background:
+                              "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.25), oklch(0.75 0.15 80 / 0.2))",
+                            border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+                            color: "oklch(0.95 0.01 85)",
+                          }
+                        : {
+                            background: "oklch(0.72 0.18 155 / 0.12)",
+                            border: "1px solid oklch(0.72 0.18 155 / 0.2)",
+                            color: "oklch(0.9 0.01 155)",
+                          }
+                    }
+                  >
+                    <p className="text-xs leading-relaxed">{msg.text}</p>
+                    <p className="text-[9px] mt-1 opacity-60">
+                      {msg.role === "admin" ? "Admin · " : "User · "}
+                      {new Date(msg.timestamp).toLocaleTimeString("en-IN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Reply input */}
+          <div className="flex gap-2">
+            <Textarea
+              data-ocid="admin.chat.reply_textarea"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendReply();
+                }
+              }}
+              placeholder="Type your reply..."
+              rows={2}
+              className="flex-1 rounded-xl text-sm resize-none"
+              style={{
+                background: "oklch(0.13 0.015 265 / 0.8)",
+                border: "1px solid oklch(0.82 0.18 85 / 0.15)",
+              }}
+            />
+            <Button
+              data-ocid="admin.chat.send_button"
+              onClick={handleSendReply}
+              disabled={!replyText.trim()}
+              size="icon"
+              className="w-11 h-auto rounded-xl flex-shrink-0 self-end"
+              style={{
+                background: replyText.trim()
+                  ? "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))"
+                  : "oklch(0.16 0.02 265)",
+                color: replyText.trim()
+                  ? "oklch(0.1 0.02 85)"
+                  : "oklch(0.4 0.03 265)",
+              }}
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        // Conversation list
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              data-ocid="admin.chat.search_input"
+              value={chatSearch}
+              onChange={(e) => setChatSearch(e.target.value)}
+              placeholder="Search by unique ID..."
+              className="h-10 pl-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
+            />
+          </div>
+
+          {filteredChats.length === 0 ? (
+            <div
+              data-ocid="admin.chat.empty_state"
+              className="flex flex-col items-center justify-center py-16 text-center"
+            >
+              <MessageSquare className="w-10 h-10 text-muted-foreground mb-3 opacity-40" />
+              <p className="text-muted-foreground text-sm">
+                No support chats yet
+              </p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Chats from users will appear here
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredChats.map((chat, i) => {
+                const lastMsg = chat.messages[chat.messages.length - 1];
+                return (
+                  <motion.button
+                    key={chat.uniqueId}
+                    data-ocid={`admin.chat.item.${i + 1}`}
+                    type="button"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    onClick={() => setSelectedUniqueId(chat.uniqueId)}
+                    className="w-full text-left glass-card rounded-2xl p-4 flex items-start gap-3 transition-all hover:opacity-90"
+                    style={{
+                      border:
+                        chat.unread > 0
+                          ? "1px solid oklch(0.72 0.18 155 / 0.3)"
+                          : "1px solid oklch(0.82 0.18 85 / 0.08)",
+                    }}
+                  >
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                      style={{
+                        background: "oklch(0.72 0.18 155 / 0.15)",
+                        color: "oklch(0.72 0.18 155)",
+                      }}
+                    >
+                      {chat.uniqueId.slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground font-mono">
+                          ID: {chat.uniqueId}
+                        </p>
+                        {chat.unread > 0 && (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                            style={{
+                              background: "oklch(0.72 0.18 155 / 0.2)",
+                              color: "oklch(0.72 0.18 155)",
+                            }}
+                          >
+                            {chat.unread}
+                          </span>
+                        )}
+                      </div>
+                      {lastMsg && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {lastMsg.role === "admin" ? "You: " : ""}
+                          {lastMsg.text}
+                        </p>
+                      )}
+                      {lastMsg && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {new Date(lastMsg.timestamp).toLocaleDateString(
+                            "en-IN",
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Admin Page ─────────────────────────────────────────────────────────────
 
 export function AdminPage({ onBack }: AdminPageProps) {
@@ -1641,6 +1995,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [userSearch, setUserSearch] = useState("");
+
+  // Build a principalStr → uniqueId map for use across all tabs
+  const uniqueIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const entry of analyticsData ?? []) {
+      const uid = (entry as { uniqueId?: string }).uniqueId;
+      if (uid) map[entry.userId.toString()] = uid;
+    }
+    return map;
+  }, [analyticsData]);
 
   const pendingSubmissions =
     submissions?.filter((s) => String(s.status) === "pending").length ?? 0;
@@ -1850,6 +2214,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   Activity
                 </span>
               </TabsTrigger>
+              <TabsTrigger
+                data-ocid="admin.chat_tab"
+                value="chat"
+                className="flex-1 min-w-[55px] rounded-xl text-xs font-semibold data-[state=active]:text-primary-foreground whitespace-nowrap"
+              >
+                <span className="flex items-center gap-1">
+                  <MessageSquare className="w-3 h-3" />
+                  Chat
+                </span>
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -1901,7 +2275,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
                 >
-                  <SubmissionRow sub={sub} index={i} />
+                  <SubmissionRow
+                    sub={sub}
+                    index={i}
+                    uniqueIdMap={uniqueIdMap}
+                  />
                 </motion.div>
               ))
             )}
@@ -2099,7 +2477,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
                 >
-                  <PaymentRow payment={payment} index={i} />
+                  <PaymentRow
+                    payment={payment}
+                    index={i}
+                    uniqueIdMap={uniqueIdMap}
+                  />
                 </motion.div>
               ))
             )}
@@ -2121,10 +2503,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 submissions={submissions ?? []}
                 payments={payments ?? []}
                 analyticsData={analyticsData ?? []}
+                uniqueIdMap={uniqueIdMap}
                 onRefresh={handleRefreshActivity}
                 isRefreshing={isRefreshing}
               />
             )}
+          </TabsContent>
+
+          {/* ── Chat Tab ── */}
+          <TabsContent value="chat" className="mt-0">
+            <AdminCCAChat />
           </TabsContent>
         </Tabs>
       </div>

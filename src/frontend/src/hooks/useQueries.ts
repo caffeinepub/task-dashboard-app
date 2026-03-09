@@ -87,6 +87,7 @@ export function useCallerProfile() {
       return actor.getCallerUserProfile();
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 5000,
   });
 }
 
@@ -129,7 +130,7 @@ export function useGetCoinBalance(userId: Principal | undefined) {
       return actor.getCoinBalance(userId);
     },
     enabled: !!actor && !isFetching && !!userId,
-    refetchInterval: 30000, // refresh every 30s
+    refetchInterval: 5000, // refresh every 5s
   });
 }
 
@@ -206,6 +207,7 @@ export function useUserSubmissions(userId: Principal | undefined) {
       return actor.getUserSubmissions(userId);
     },
     enabled: !!actor && !isFetching && !!userId,
+    refetchInterval: 5000,
   });
 }
 
@@ -297,6 +299,7 @@ export function useUserPayments(userId: Principal | undefined) {
       return actor.getUserPayments(userId);
     },
     enabled: !!actor && !isFetching && !!userId,
+    refetchInterval: 5000,
   });
 }
 

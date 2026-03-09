@@ -19,6 +19,7 @@ import { AIChatBot } from "./components/app/AIChatBot";
 import { AdminAuthGate } from "./components/app/AdminAuthGate";
 import { AuthScreen } from "./components/app/AuthScreen";
 import { BottomNav, type NavTab } from "./components/app/BottomNav";
+import { CCAChat } from "./components/app/CCAChat";
 import { useActor } from "./hooks/useActor";
 import { useAnticheat } from "./hooks/useAnticheat";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
@@ -1006,6 +1007,15 @@ export default function App() {
         actor={
           actor as unknown as import("./backend.d").backendInterface | null
         }
+      />
+
+      {/* CCA Support Chat — teal button, shown for authenticated users with profile */}
+      <CCAChat
+        actor={
+          actor as unknown as import("./backend.d").backendInterface | null
+        }
+        uniqueId={profile?.uniqueId ?? undefined}
+        principal={principal}
       />
 
       <Toaster

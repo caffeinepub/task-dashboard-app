@@ -375,6 +375,39 @@ export function AIChatBot({ actor }: AIChatBotProps) {
 
     const q = question.toLowerCase();
 
+    // Detect standalone 12-digit order ID anywhere in the message
+    const standaloneOrderId = question.trim().match(/^(\d{12})$/);
+    if (standaloneOrderId) {
+      const orderId = standaloneOrderId[1];
+      const payment = userData.payments.find((p) => p.orderId === orderId);
+      if (payment) {
+        const date = new Date(
+          Number(payment.createdAt) / 1_000_000,
+        ).toLocaleDateString("en-IN");
+        await addBotMessage(
+          `🔍 Order #${orderId}\n\n₹${Number(payment.amount).toLocaleString("en-IN")} INR\nStatus: ${statusLabel(payment.status)}\nDate: ${date}\n\n${
+            payment.status === "transferred"
+              ? "✅ Your payment has been transferred."
+              : payment.status === "declined"
+                ? "❌ This payment was declined. Contact support for help."
+                : payment.status === "approved"
+                  ? "✅ Approved — payment is being processed."
+                  : payment.status === "inPayment"
+                    ? "⏳ Payment is in progress."
+                    : "⏳ This request is pending review."
+          }`,
+          ["Check my balance", "Contact support", "Ask another question"],
+        );
+      } else {
+        await addBotMessage(
+          `❌ No order found with ID #${orderId} on your account.\n\nPlease double-check the order ID and try again.`,
+          ["Withdrawal status", "Contact support", "Ask another question"],
+        );
+      }
+      setSessionState("awaiting_question");
+      return;
+    }
+
     if (
       q.includes("balance") ||
       q.includes("coin") ||
@@ -396,6 +429,39 @@ export function AIChatBot({ actor }: AIChatBotProps) {
       q.includes("payout") ||
       q.includes("order")
     ) {
+      // Check if user typed a 12-digit order ID
+      const orderIdMatch = q.match(/\b(\d{12})\b/);
+      if (orderIdMatch) {
+        const orderId = orderIdMatch[1];
+        const payment = userData.payments.find((p) => p.orderId === orderId);
+        if (payment) {
+          const date = new Date(
+            Number(payment.createdAt) / 1_000_000,
+          ).toLocaleDateString("en-IN");
+          await addBotMessage(
+            `🔍 Order #${orderId}\n\n₹${Number(payment.amount).toLocaleString("en-IN")} INR\nStatus: ${statusLabel(payment.status)}\nDate: ${date}\n\n${
+              payment.status === "transferred"
+                ? "✅ Your payment has been transferred."
+                : payment.status === "declined"
+                  ? "❌ This payment was declined. Contact support for help."
+                  : payment.status === "approved"
+                    ? "✅ Approved — payment is being processed."
+                    : payment.status === "inPayment"
+                      ? "⏳ Payment is in progress."
+                      : "⏳ This request is pending review."
+            }`,
+            ["Check my balance", "Contact support", "Ask another question"],
+          );
+        } else {
+          await addBotMessage(
+            `❌ No order found with ID #${orderId} on your account.\n\nPlease double-check the order ID and try again.`,
+            ["Withdrawal status", "Contact support", "Ask another question"],
+          );
+        }
+        setSessionState("awaiting_question");
+        return;
+      }
+
       const payments = userData.payments;
       if (payments.length === 0) {
         await addBotMessage(
@@ -415,10 +481,20 @@ export function AIChatBot({ actor }: AIChatBotProps) {
         await addBotMessage(
           `📋 Your recent withdrawal requests:\n\n${lines.join("\n\n")}${
             payments.length > 3 ? `\n\n...and ${payments.length - 3} more` : ""
-          }\n\nFor any concerns, copy your Order ID and contact our support team.`,
-          ["Check my balance", "Contact support", "Ask another question"],
+          }\n\nTo check a specific order, paste its 12-digit Order ID.\nFor concerns, copy your Order ID and contact our support team.`,
+          [
+            "Check by Order ID",
+            "Check my balance",
+            "Contact support",
+            "Ask another question",
+          ],
         );
       }
+    } else if (q.includes("check by order") || q.includes("order id")) {
+      await addBotMessage(
+        "📋 Please type or paste your 12-digit Order ID and I'll look it up for you.\n\nExample: 123456789012",
+        ["Cancel"],
+      );
     } else if (
       q.includes("task") ||
       q.includes("submission") ||
