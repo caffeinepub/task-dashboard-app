@@ -13,9 +13,9 @@ import Map "mo:core/Map";
 import Iter "mo:core/Iter";
 import Order "mo:core/Order";
 import Char "mo:core/Char";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   include MixinStorage();
   public type Blob = Storage.ExternalBlob;
@@ -178,16 +178,16 @@ actor {
 
   // ------ User Management ------
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     ensureUserRegistered(caller);
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(_user : Principal) : async ?UserProfile {
-    if (caller != _user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     userProfiles.get(_user);
   };
@@ -201,8 +201,8 @@ actor {
       totalSubmissions : Nat;
     };
   } {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can query by uniqueId");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
 
     switch (userProfiles.entries().find(
@@ -235,8 +235,8 @@ actor {
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : { email : Text; role : Text; isBlocked : Bool }) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     ensureUserRegistered(caller);
     switch (userProfiles.get(caller)) {
@@ -268,8 +268,8 @@ actor {
   };
 
   public shared ({ caller }) func addCoins(userId : Principal, amount : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can add coins");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -285,8 +285,8 @@ actor {
   };
 
   public shared ({ caller }) func deductCoins(userId : Principal, amount : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can deduct coins");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -305,18 +305,18 @@ actor {
   };
 
   public query ({ caller }) func getCoinBalance(userId : Principal) : async Nat {
-    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own coin balance");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) { profile.coinBalance };
-      case null { Runtime.trap("User not found") };
+      case null { 0 };
     };
   };
 
   public shared ({ caller }) func blockUser(userId : Principal) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can block users");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -332,8 +332,8 @@ actor {
   };
 
   public shared ({ caller }) func unblockUser(userId : Principal) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can unblock users");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -350,8 +350,8 @@ actor {
 
   // ------ Task Management ------
   public shared ({ caller }) func updateTask(taskId : Nat, title : Text, image : ?Blob, reward : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update tasks");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     if (taskId >= 6) {
       Runtime.trap("Invalid task id");
@@ -377,8 +377,8 @@ actor {
   };
 
   public query ({ caller }) func getTasks() : async [Task] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view tasks");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     if (isUserBlocked(caller)) {
       Runtime.trap("Unauthorized: User is blocked");
@@ -388,8 +388,8 @@ actor {
 
   // ------ Submission Management ------
   public shared ({ caller }) func submitTask(taskId : Nat, file : Blob) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can submit tasks");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     if (isUserBlocked(caller)) {
       Runtime.trap("Unauthorized: User is blocked");
@@ -426,8 +426,8 @@ actor {
   };
 
   public shared ({ caller }) func reviewSubmission(submissionId : Nat, approve : Bool) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can review submissions");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (submissions.get(submissionId)) {
       case (null) {
@@ -469,11 +469,8 @@ actor {
   };
 
   public query ({ caller }) func getUserSubmissions(userId : Principal) : async [Submission] {
-    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own submissions");
-    };
-    if (isUserBlocked(caller)) {
-      Runtime.trap("Unauthorized: User is blocked");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     submissions.values().toArray().filter(func(s : Submission) : Bool {
       s.userId == userId
@@ -481,16 +478,16 @@ actor {
   };
 
   public query ({ caller }) func getAllSubmissions() : async [Submission] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all submissions");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     submissions.values().toArray();
   };
 
   // --- PaymentRequest Functions ---
   public shared ({ caller }) func requestPayment(amount : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can request payments");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     ensureUserRegistered(caller);
     if (isUserBlocked(caller)) {
@@ -520,8 +517,8 @@ actor {
   };
 
   public shared ({ caller }) func reviewPayment(paymentId : Nat, approve : Bool) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can review payments");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (paymentRequests.get(paymentId)) {
       case (null) {
@@ -568,8 +565,8 @@ actor {
   };
 
   public shared ({ caller }) func updatePaymentStatus(paymentId : Nat, newStatus : { #approved; #inPayment; #transferred; #declined }) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update payment status");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
 
     switch (paymentRequests.get(paymentId)) {
@@ -617,11 +614,8 @@ actor {
   };
 
   public query ({ caller }) func getUserPayments(userId : Principal) : async [PaymentRequest] {
-    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own payments");
-    };
-    if (isUserBlocked(caller)) {
-      Runtime.trap("Unauthorized: User is blocked");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     paymentRequests.values().toArray().filter<PaymentRequest>(func(p : PaymentRequest) : Bool {
       p.userId == userId
@@ -629,16 +623,16 @@ actor {
   };
 
   public query ({ caller }) func getAllPayments() : async [PaymentRequest] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all payments");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     paymentRequests.values().toArray();
   };
 
   // ------ User Analytics ------
   public shared ({ caller }) func recordLastLogin() : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can record login");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     if (isUserBlocked(caller)) {
       Runtime.trap("Unauthorized: User is blocked");
@@ -665,8 +659,8 @@ actor {
     tasksCompleted : Nat;
     totalSubmissions : Nat;
   } {
-    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own analytics");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userAnalytics.get(userId)) {
       case (?analytics) {
@@ -693,8 +687,8 @@ actor {
     isBlocked : Bool;
     bankDetails : ?BankDetails;
   }] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all analytics");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
 
     let array = userProfiles.entries().toArray().map(
@@ -725,8 +719,8 @@ actor {
   // Bank Details Functions
 
   public shared ({ caller }) func saveBankDetails(ifscCode : Text, bankName : Text, accountNumber : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save bank details");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     ensureUserRegistered(caller);
     switch (userProfiles.get(caller)) {
@@ -769,8 +763,8 @@ actor {
   };
 
   public shared ({ caller }) func adminUpdateBankDetails(userId : Principal, ifscCode : Text, bankName : Text, accountNumber : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update bank details");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?existingProfile) {
@@ -790,8 +784,8 @@ actor {
   };
 
   public query ({ caller }) func getBankDetails(userId : Principal) : async ?BankDetails {
-    if (caller != userId and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own bank details");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) { profile.bankDetails };
@@ -800,8 +794,8 @@ actor {
   };
 
   public shared ({ caller }) func freezeAccountForCheat(userId : Principal) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can freeze accounts");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
     switch (userProfiles.get(userId)) {
       case (?profile) {
@@ -817,15 +811,16 @@ actor {
   };
 
   public query ({ caller }) func isPinAdmin() : async Bool {
-    AccessControl.isAdmin(accessControlState, caller);
+    false;
   };
+
 
   // --- Task only on startup ---
   private func initTasks() {
     for (i in [0, 1, 2, 3, 4, 5].values()) {
       tasks.add(i, {
         id = i;
-        title = "Task " # i.toText();
+        title = "Task " # (i + 1).toText();
         image = null;
         reward = if (i == 0) { 11 } else { 0 };
       });
@@ -834,8 +829,8 @@ actor {
   initTasks();
 
   public shared ({ caller }) func deleteUser(userId : Principal) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete users");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
 
     userProfiles.remove(userId);
@@ -868,8 +863,8 @@ actor {
   };
 
   public shared ({ caller }) func clearAllData() : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can clear all data");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Not authenticated");
     };
 
     submissions.clear();

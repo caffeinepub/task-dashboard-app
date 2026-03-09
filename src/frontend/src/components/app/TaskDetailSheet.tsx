@@ -85,8 +85,8 @@ export function TaskDetailSheet({
         toast.error("Please upload an image or video file");
         return;
       }
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("File must be under 10MB");
+      if (file.size > 20 * 1024 * 1024) {
+        toast.error("File must be under 20MB");
         return;
       }
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -113,10 +113,68 @@ export function TaskDetailSheet({
     if (file) handleFile(file);
   };
 
+  // Compress an image file to JPEG under 1MB using Canvas API
+  const compressImage = async (file: File): Promise<File> => {
+    if (!file.type.startsWith("image/")) return file;
+    return new Promise<File>((resolve, reject) => {
+      const img = new Image();
+      const objUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        const MAX_SIZE = 1024;
+        let { width, height } = img;
+        if (width > MAX_SIZE || height > MAX_SIZE) {
+          if (width > height) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          } else {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas not supported"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Failed to compress image"));
+              return;
+            }
+            const compressedFile = new File(
+              [blob],
+              file.name.replace(/\.[^.]+$/, ".jpg"),
+              { type: "image/jpeg" },
+            );
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          0.7,
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+        reject(new Error("Failed to load image for compression"));
+      };
+      img.src = objUrl;
+    });
+  };
+
   const handleSubmit = async () => {
     if (!selectedFile || !task) return;
     setSubmitError(null);
     try {
+      // Compress image before upload to avoid 4MB ICP payload limit
+      const fileToUpload = selectedFile.type.startsWith("image/")
+        ? await compressImage(selectedFile)
+        : selectedFile;
+
       // Use FileReader wrapped in a Promise for maximum compatibility
       const fileBytes = await new Promise<Uint8Array>((resolve, reject) => {
         const reader = new FileReader();
@@ -129,12 +187,19 @@ export function TaskDetailSheet({
           }
         };
         reader.onerror = () => reject(new Error("FileReader error"));
-        reader.readAsArrayBuffer(selectedFile);
+        reader.readAsArrayBuffer(fileToUpload);
       });
 
       if (fileBytes.length === 0) {
         throw new Error(
           "File appears to be empty. Please select a valid file.",
+        );
+      }
+
+      // Check size after compression - warn if still large
+      if (fileBytes.length > 3.5 * 1024 * 1024) {
+        throw new Error(
+          "File is too large even after compression. Please use a smaller screenshot (under 3MB).",
         );
       }
 
@@ -317,7 +382,7 @@ export function TaskDetailSheet({
                         Drop file here or tap to browse
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        JPG, PNG, GIF, MP4, WebM — max 10MB
+                        JPG, PNG, GIF, MP4, WebM — auto-compressed
                       </p>
                     </div>
                     <div className="flex items-center gap-3 text-muted-foreground">
