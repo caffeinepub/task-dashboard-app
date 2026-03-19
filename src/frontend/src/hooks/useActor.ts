@@ -26,14 +26,22 @@ export function useActor() {
       };
 
       const actor = await createActorWithConfig(actorOptions);
-      const adminToken = getSecretParameter("caffeineAdminToken") || "";
-      await actor._initializeAccessControlWithSecret(adminToken);
+      // Non-fatal: _initializeAccessControlWithSecret may fail on network issues
+      // or when no admin token is present — this must never block the user from logging in.
+      try {
+        const adminToken = getSecretParameter("caffeineAdminToken") || "";
+        await actor._initializeAccessControlWithSecret(adminToken);
+      } catch {
+        // Silently ignore — admin role is enforced via PIN+face scan, not ICP roles
+      }
       return actor;
     },
     // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
-    // This will cause the actor to be recreated when the identity changes
     enabled: true,
+    // Retry actor creation on failure
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * attempt, 3000),
   });
 
   // When the actor changes, invalidate dependent queries

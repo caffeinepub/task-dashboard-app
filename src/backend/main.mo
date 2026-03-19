@@ -168,16 +168,20 @@ actor {
     let retSize = ret.size();
     if (retSize < 12) {
       let zerosNeeded = 12 - retSize;
-      let emptyString = "";
-      let zeros = zerosNeeded.toText();
-      emptyString # zeros # ret;
+      var paddingStr = "";
+      var i = 0;
+      while (i < zerosNeeded) {
+        paddingStr := paddingStr # "0";
+        i += 1;
+      };
+      paddingStr # ret;
     } else {
       ret;
     };
   };
 
   // ------ User Management ------
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+  public shared ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (caller.isAnonymous()) {
       Runtime.trap("Unauthorized: Not authenticated");
     };
@@ -501,6 +505,15 @@ actor {
 
     if (callerProfile.coinBalance < amount) {
       Runtime.trap("Insufficient coin balance for withdrawal");
+    };
+
+    let hasPending = paymentRequests.values().find(
+      func(r : PaymentRequest) : Bool {
+        r.userId == caller and (r.status == #pending or r.status == #approved or r.status == #inPayment)
+      }
+    ) != null;
+    if (hasPending) {
+      Runtime.trap("You already have an active withdrawal request");
     };
 
     let request : PaymentRequest = {

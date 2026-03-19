@@ -84,10 +84,19 @@ export function useCallerProfile() {
     queryKey: ["callerProfile"],
     queryFn: async () => {
       if (!actor) return null;
-      return actor.getCallerUserProfile();
+      // Race the backend call against a 15-second timeout so the loading
+      // screen never hangs forever if the canister is unresponsive.
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error("Profile load timed out")), 8000),
+      );
+      const profilePromise = actor.getCallerUserProfile();
+      return Promise.race([profilePromise, timeoutPromise]);
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: 5000,
+    // No refetchInterval here — polling causes stale loading state on slow networks
+    // Retry up to 2 times with backoff before showing the error screen
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 4000),
   });
 }
 
@@ -104,7 +113,7 @@ export function useIsAdmin() {
 }
 
 export function useSaveProfile() {
-  const { actor } = useActor();
+  const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (profile: {
@@ -112,11 +121,13 @@ export function useSaveProfile() {
       role: string;
       isBlocked: boolean;
     }) => {
+      if (isFetching) throw new Error("Still connecting, please wait…");
       if (!actor) throw new Error("Not connected");
       return actor.saveCallerUserProfile(profile);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["callerProfile"] });
+      void queryClient.refetchQueries({ queryKey: ["callerProfile"] });
     },
   });
 }
@@ -220,6 +231,10 @@ export function useAllSubmissions() {
       return actor.getAllSubmissions();
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 5000,
+    refetchOnMount: true,
+    staleTime: 0,
+    retry: 3,
   });
 }
 
@@ -327,6 +342,10 @@ export function useAllPayments() {
       return actor.getAllPayments();
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 5000,
+    refetchOnMount: true,
+    staleTime: 0,
+    retry: 3,
   });
 }
 
@@ -388,6 +407,10 @@ export function useAllUsersAnalytics() {
       return actor.getAllUsersAnalytics();
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 5000,
+    refetchOnMount: true,
+    staleTime: 0,
+    retry: 3,
   });
 }
 

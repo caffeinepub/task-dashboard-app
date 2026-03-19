@@ -76,17 +76,10 @@ export function TaskCard({ task, index, submission, onStart }: TaskCardProps) {
     setImageUrl(null);
   }, [task.image, taskConfig?.defaultImage]);
 
-  // Detect "empty" tasks: no backend image, default title pattern, no link
-  const DEFAULT_TASK_TITLES = [
-    "Task 0",
-    "Task 1",
-    "Task 2",
-    "Task 3",
-    "Task 4",
-    "Task 5",
-  ];
+  // Detect "empty" tasks: no backend image, default title pattern ("Task N"), no link
+  // Backend initialises tasks as "Task 1" ... "Task 6" (1-indexed)
   const hasBackendImage = !!(task.image && task.image.length > 0);
-  const hasDefaultTitle = DEFAULT_TASK_TITLES.includes(task.title);
+  const hasDefaultTitle = /^Task \d+$/.test(task.title);
   const hasConfigLink = !!effectiveLink;
   const isEmpty = !hasBackendImage && hasDefaultTitle && !hasConfigLink;
 

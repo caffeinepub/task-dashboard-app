@@ -5,6 +5,7 @@ import { Coins, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useActor } from "../../hooks/useActor";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import { useSaveProfile } from "../../hooks/useQueries";
 
@@ -16,13 +17,16 @@ interface AuthScreenProps {
 export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
   const { login, isLoggingIn, isInitializing, identity } =
     useInternetIdentity();
+  const { actor, isFetching: actorFetching } = useActor();
   const saveProfile = useSaveProfile();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [setupStep, setSetupStep] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const isConnected = !!identity;
+  const isActorReady = !!actor && !actorFetching;
 
   const handleLogin = () => {
     login();
@@ -38,14 +42,23 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
       return;
     }
 
+    if (!isActorReady) {
+      toast.error(
+        "Still connecting to the network, please wait a moment and try again.",
+      );
+      return;
+    }
+
+    setIsSaving(true);
     const profileData = {
       email: email.trim(),
       role: "user",
       isBlocked: false,
     };
 
-    // Try up to 3 times with a short delay between attempts
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    // Try up to 5 times with exponential backoff
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         await saveProfile.mutateAsync(profileData);
         toast.success("Welcome to Dark Coin!");
@@ -54,18 +67,30 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
           setShowSplash(false);
           onProfileSaved();
         }, 3500);
+        setIsSaving(false);
         return; // success – exit
       } catch (err) {
+        lastError = err;
         console.error(`Profile save attempt ${attempt} failed:`, err);
-        if (attempt < 3) {
-          // Wait 1s before retrying
-          await new Promise((r) => setTimeout(r, 1000));
-        } else {
-          toast.error(
-            "Failed to save profile. Please check your connection and try again.",
-          );
+        if (attempt < 5) {
+          // Exponential backoff: 1s, 2s, 3s, 4s
+          await new Promise((r) => setTimeout(r, attempt * 1000));
         }
       }
+    }
+
+    setIsSaving(false);
+    const errMsg =
+      lastError instanceof Error ? lastError.message : String(lastError);
+    // Show a more helpful error based on what went wrong
+    if (errMsg.includes("connecting") || errMsg.includes("Not connected")) {
+      toast.error(
+        "Could not connect to the network. Please check your internet connection and try again.",
+      );
+    } else if (errMsg.includes("blocked")) {
+      toast.error("Your account has been blocked. Please contact support.");
+    } else {
+      toast.error("Failed to save profile. Please try again.");
     }
   };
 
@@ -352,13 +377,28 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
                   />
                 </div>
 
+                {/* Actor loading indicator */}
+                {isConnected && actorFetching && (
+                  <div className="flex items-center gap-2 justify-center py-1">
+                    <Loader2
+                      className="w-3 h-3 animate-spin"
+                      style={{ color: "oklch(0.82 0.18 85 / 0.6)" }}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      Connecting to network…
+                    </span>
+                  </div>
+                )}
+
                 <Button
                   data-ocid="auth.submit_button"
                   onClick={handleSaveProfile}
                   disabled={
+                    isSaving ||
                     saveProfile.isPending ||
                     !email.trim() ||
-                    !displayName.trim()
+                    !displayName.trim() ||
+                    (isConnected && actorFetching)
                   }
                   className="w-full h-12 font-bold text-base rounded-2xl btn-glow"
                   style={{
@@ -367,10 +407,15 @@ export function AuthScreen({ hasProfile, onProfileSaved }: AuthScreenProps) {
                     color: "oklch(0.1 0.02 85)",
                   }}
                 >
-                  {saveProfile.isPending ? (
+                  {isSaving || saveProfile.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Saving…
+                    </>
+                  ) : isConnected && actorFetching ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Connecting…
                     </>
                   ) : (
                     "Enter Dark Coin"

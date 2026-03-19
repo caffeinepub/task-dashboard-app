@@ -1,0 +1,259 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("/assets/fonts/BricolageGrotesque[opsz,wdth,wght].woff2")
+    format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/assets/fonts/PlusJakartaSans[wght].woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 1rem;
+
+    /* Dark Coin — Deep Black + Electric Gold Theme */
+    /* Background: deep near-black charcoal */
+    --background: 0.09 0.01 260;
+    --foreground: 0.96 0.008 80;
+
+    /* Card: slightly lifted dark surface */
+    --card: 0.14 0.015 265;
+    --card-foreground: 0.96 0.008 80;
+
+    --popover: 0.16 0.018 265;
+    --popover-foreground: 0.96 0.008 80;
+
+    /* Primary: Electric Gold */
+    --primary: 0.82 0.18 85;
+    --primary-foreground: 0.1 0.02 85;
+
+    /* Secondary: muted dark surface */
+    --secondary: 0.19 0.025 265;
+    --secondary-foreground: 0.82 0.012 260;
+
+    /* Muted */
+    --muted: 0.17 0.02 265;
+    --muted-foreground: 0.55 0.03 260;
+
+    /* Accent: warm gold-amber */
+    --accent: 0.22 0.05 80;
+    --accent-foreground: 0.92 0.02 80;
+
+    /* Destructive: vivid coral red */
+    --destructive: 0.6 0.22 25;
+    --destructive-foreground: 0.98 0 0;
+
+    /* Success: electric green */
+    --success: 0.72 0.18 155;
+    --success-foreground: 0.1 0.02 155;
+
+    /* Warning: amber-gold */
+    --warning: 0.82 0.18 80;
+    --warning-foreground: 0.1 0.02 80;
+
+    --border: 0.24 0.03 265;
+    --input: 0.19 0.025 265;
+    --ring: 0.82 0.18 85;
+
+    --chart-1: 0.82 0.18 85;
+    --chart-2: 0.72 0.18 155;
+    --chart-3: 0.6 0.22 25;
+    --chart-4: 0.7 0.2 300;
+    --chart-5: 0.75 0.18 195;
+
+    --sidebar: 0.12 0.015 265;
+    --sidebar-foreground: 0.96 0.008 80;
+    --sidebar-primary: 0.82 0.18 85;
+    --sidebar-primary-foreground: 0.1 0.02 85;
+    --sidebar-accent: 0.19 0.025 265;
+    --sidebar-accent-foreground: 0.82 0.012 260;
+    --sidebar-border: 0.24 0.03 265;
+    --sidebar-ring: 0.82 0.18 85;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system,
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer components {
+  /* Glassmorphic card surface — dark gold tint */
+  .glass-card {
+    background: oklch(var(--card) / 0.88);
+    backdrop-filter: blur(14px);
+    border: 1px solid oklch(var(--border) / 0.5);
+    box-shadow: 0 4px 24px oklch(0 0 0 / 0.5), 0 1px 0
+      oklch(var(--primary) / 0.06) inset;
+  }
+
+  /* Gold glow button */
+  .btn-glow {
+    box-shadow: 0 0 20px oklch(var(--primary) / 0.4);
+  }
+
+  .btn-glow:hover {
+    box-shadow: 0 0 32px oklch(var(--primary) / 0.6);
+  }
+
+  /* Status badge variants */
+  .status-pending {
+    background: oklch(var(--warning) / 0.15);
+    color: oklch(var(--warning));
+    border: 1px solid oklch(var(--warning) / 0.3);
+  }
+
+  .status-approved {
+    background: oklch(var(--success) / 0.15);
+    color: oklch(var(--success));
+    border: 1px solid oklch(var(--success) / 0.3);
+  }
+
+  .status-declined {
+    background: oklch(var(--destructive) / 0.15);
+    color: oklch(var(--destructive));
+    border: 1px solid oklch(var(--destructive) / 0.3);
+  }
+
+  /* Bottom nav bar */
+  .bottom-nav {
+    background: oklch(var(--card) / 0.95);
+    backdrop-filter: blur(24px);
+    border-top: 1px solid oklch(var(--border) / 0.4);
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(var(--border));
+    border-radius: 99px;
+  }
+
+  /* Shimmer animation for skeletons */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      oklch(var(--muted) / 0.8) 25%,
+      oklch(var(--accent) / 0.4) 50%,
+      oklch(var(--muted) / 0.8) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Page transition */
+  @keyframes fadeSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .page-enter {
+    animation: fadeSlideUp 0.3s ease-out forwards;
+  }
+
+  /* Button shimmer animation for task cards */
+  @keyframes shimmerSlide {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  /* Gold accent nav active */
+  .nav-active {
+    color: oklch(var(--primary));
+  }
+
+  .nav-active-indicator {
+    background: oklch(var(--primary));
+    box-shadow: 0 0 8px oklch(var(--primary) / 0.7);
+  }
+
+  /* Gold pulse glow animation */
+  @keyframes goldPulse {
+    0%,
+    100% {
+      box-shadow: 0 0 20px oklch(0.82 0.18 85 / 0.4), 0 0 40px
+        oklch(0.82 0.18 85 / 0.2);
+    }
+    50% {
+      box-shadow: 0 0 40px oklch(0.82 0.18 85 / 0.7), 0 0 80px
+        oklch(0.82 0.18 85 / 0.35);
+    }
+  }
+
+  .gold-pulse {
+    animation: goldPulse 2s ease-in-out infinite;
+  }
+
+  /* Splash progress bar animation */
+  @keyframes fillProgress {
+    from {
+      width: 0%;
+    }
+    to {
+      width: 100%;
+    }
+  }
+
+  .splash-progress {
+    animation: fillProgress 3.5s ease-in-out forwards;
+  }
+}

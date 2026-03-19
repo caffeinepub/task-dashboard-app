@@ -736,16 +736,34 @@ export default function App() {
     useInternetIdentity();
   const isAuthenticated = !!identity;
 
-  const { data: profile, isLoading: profileLoading } = useCallerProfile();
-  const { data: isAdmin, isLoading: adminLoading } = useIsAdmin();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = useCallerProfile();
+  const { data: isAdmin } = useIsAdmin();
   const recordLastLogin = useRecordLastLogin();
   const { actor } = useActor();
 
   const [activeTab, setActiveTab] = useState<NavTab>("home");
   const [showSplash, setShowSplash] = useState(false);
+  // Hard timeout: if profile is still loading after 12s, offer a manual retry
+  const [loadingTooLong, setLoadingTooLong] = useState(false);
 
   // Track whether the user was previously unauthenticated (for detecting fresh login)
   const prevAuthRef = useRef(false);
+
+  // Hard loading timeout — show a retry button after 12 seconds
+  useEffect(() => {
+    if (!profileLoading) {
+      setLoadingTooLong(false);
+      return;
+    }
+    setLoadingTooLong(false);
+    const t = setTimeout(() => setLoadingTooLong(true), 12000);
+    return () => clearTimeout(t);
+  }, [profileLoading]);
 
   // ── Anticheat — called at top level (rules of hooks) ──────────────────────
   // principal and profile may be undefined/null; hook handles those cases gracefully
@@ -876,22 +894,100 @@ export default function App() {
   }
 
   // ── Still loading profile ─────────────────────────────────────────────────
-  if (profileLoading || adminLoading) {
+  if (profileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2
-            className="w-8 h-8 animate-spin"
-            style={{ color: "oklch(0.82 0.18 85)" }}
-          />
-          <p className="text-muted-foreground text-sm">Loading your profile…</p>
+        <div className="flex flex-col items-center gap-5 px-6 text-center">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.82 0.18 85 / 0.2), oklch(0.75 0.15 80 / 0.1))",
+              border: "1px solid oklch(0.82 0.18 85 / 0.3)",
+              boxShadow: "0 0 20px oklch(0.82 0.18 85 / 0.2)",
+            }}
+          >
+            <Loader2
+              className="w-7 h-7 animate-spin"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            />
+          </div>
+          <div className="space-y-1">
+            <p
+              className="font-semibold text-sm"
+              style={{ color: "oklch(0.82 0.18 85)" }}
+            >
+              {loadingTooLong ? "Still connecting…" : "Loading your profile…"}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {loadingTooLong
+                ? "This is taking longer than usual"
+                : "Connecting to Dark Coin network"}
+            </p>
+          </div>
+          {loadingTooLong && (
+            <Button
+              data-ocid="profile_loading.retry_button"
+              onClick={() => {
+                setLoadingTooLong(false);
+                void refetchProfile();
+              }}
+              variant="outline"
+              className="h-9 px-6 rounded-2xl text-sm font-semibold border-border/50"
+            >
+              Retry
+            </Button>
+          )}
         </div>
       </div>
     );
   }
 
-  // ── Authenticated but no profile → show profile setup ────────────────────
-  if (!profile) {
+  // ── Profile load error — show retry instead of hanging ───────────────────
+  if (profileError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-5 px-6 text-center max-w-sm">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center"
+            style={{
+              background: "oklch(0.55 0.25 25 / 0.15)",
+              border: "1px solid oklch(0.55 0.25 25 / 0.4)",
+            }}
+          >
+            <AlertCircle
+              className="w-7 h-7"
+              style={{ color: "oklch(0.65 0.25 25)" }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <p className="font-bold text-foreground">Connection Problem</p>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Could not load your profile. Please check your internet connection
+              and try again.
+            </p>
+          </div>
+          <Button
+            data-ocid="profile_error.retry_button"
+            onClick={() => refetchProfile()}
+            className="h-11 px-8 rounded-2xl font-semibold"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.82 0.18 85), oklch(0.75 0.15 80))",
+              color: "oklch(0.1 0.02 85)",
+            }}
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Authenticated but no profile, OR auto-registered with empty email ────
+  // getCallerUserProfile auto-registers new users with email="".
+  // We treat an empty email as "profile not yet set up" so AuthScreen shows.
+  if (!profile || !profile.email) {
     return (
       <>
         <AuthScreen

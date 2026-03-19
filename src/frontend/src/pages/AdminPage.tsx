@@ -2287,9 +2287,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
           {/* ── Users Tab (Full Rebuild) ── */}
           <TabsContent value="users" className="space-y-3 mt-0">
-            {/* Search bar */}
-            <div className="mb-3">
-              <div className="relative">
+            {/* Search bar + Refresh */}
+            <div className="mb-3 flex gap-2">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   data-ocid="admin.users.search_input"
@@ -2299,6 +2299,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   className="h-10 pl-9 rounded-xl bg-secondary/40 border-border/40 text-sm"
                 />
               </div>
+              <Button
+                data-ocid="admin.users.refresh_button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: ["allUsersAnalytics"],
+                  })
+                }
+                className="rounded-xl h-10 px-3 text-xs border-border/40 flex-shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
             </div>
 
             {/* Summary stats */}
@@ -2412,6 +2425,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
           {/* ── Payments Tab ── */}
           <TabsContent value="payments" className="space-y-3 mt-0">
+            {/* Refresh button */}
+            <div className="flex justify-end mb-1">
+              <Button
+                data-ocid="admin.payments.refresh_button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  queryClient.invalidateQueries({ queryKey: ["allPayments"] })
+                }
+                className="rounded-xl h-8 text-xs border-border/40"
+              >
+                <RefreshCw className="w-3 h-3 mr-1.5" />
+                Refresh
+              </Button>
+            </div>
             <div className="grid grid-cols-3 gap-2 mb-4">
               {[
                 {
@@ -2427,10 +2455,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   color: "0.82 0.18 80",
                 },
                 {
-                  label: "Accepted",
+                  label: "Processed",
                   value:
-                    payments?.filter((p) => String(p.status) === "accepted")
-                      .length ?? 0,
+                    payments?.filter((p) =>
+                      ["approved", "inPayment", "transferred"].includes(
+                        String(p.status),
+                      ),
+                    ).length ?? 0,
                   Icon: CheckCircle,
                   color: "0.72 0.18 155",
                 },
